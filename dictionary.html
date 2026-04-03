@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GramVault — Custom Dictionary</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: #1e293b;
+      background: #f8fafc;
+      min-height: 100vh;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .header-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #4338ca, #1e1b4b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .header-sub {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+
+    .header-back {
+      margin-left: auto;
+      font-size: 12px;
+      color: #6366f1;
+      text-decoration: none;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+
+    .header-back:hover { background: #ede9fe; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      padding: 14px 18px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-size: 22px;
+      font-weight: 700;
+      color: #4338ca;
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+
+    .stat-divider {
+      width: 1px;
+      background: #f1f5f9;
+      flex-shrink: 0;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .search-wrap {
+      flex: 1;
+      min-width: 180px;
+      position: relative;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    #searchInput {
+      width: 100%;
+      padding: 8px 12px 8px 32px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+      color: #1e293b;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #searchInput:focus { border-color: #818cf8; }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid transparent;
+      font-weight: 500;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: #4338ca;
+      color: #fff;
+      border-color: #4338ca;
+    }
+    .btn-primary:hover { background: #3730a3; }
+
+    .btn-outline {
+      background: #fff;
+      color: #374151;
+      border-color: #e2e8f0;
+    }
+    .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+    .btn-danger {
+      background: #fff;
+      color: #ef4444;
+      border-color: #fca5a5;
+    }
+    .btn-danger:hover { background: #fef2f2; }
+
+    /* Add word row */
+    .add-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    #newWordInput {
+      flex: 1;
+      padding: 8px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+      color: #1e293b;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #newWordInput:focus { border-color: #818cf8; }
+
+    /* Word list */
+    .list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .list-count {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .word-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+    }
+
+    .word-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 7px 10px 7px 14px;
+      font-size: 13px;
+      color: #334155;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .word-chip:hover { border-color: #c7d2fe; background: #f5f3ff; }
+
+    .word-chip span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .word-remove {
+      background: none;
+      border: none;
+      color: #cbd5e1;
+      cursor: pointer;
+      padding: 0 0 0 6px;
+      font-size: 14px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+
+    .word-remove:hover { color: #ef4444; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #94a3b8;
+    }
+
+    .empty-state-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
+    .empty-state-sub { font-size: 13px; line-height: 1.5; }
+
+    /* Import/export area */
+    .io-section {
+      margin-top: 28px;
+      padding: 18px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+    }
+
+    .io-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 10px;
+    }
+
+    .io-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    #importArea {
+      width: 100%;
+      height: 80px;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #334155;
+      background: #f8fafc;
+      resize: vertical;
+      outline: none;
+      margin-bottom: 8px;
+      transition: border-color 0.15s;
+    }
+
+    #importArea:focus { border-color: #818cf8; }
+
+    .io-hint {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">🔒</div>
+      <div>
+        <h1>Custom Dictionary</h1>
+        <div class="header-sub">GramVault — words that will never be flagged</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-num" id="totalCount">0</span>
+        <div class="stat-label">total words</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat">
+        <span class="stat-num" id="shownCount">0</span>
+        <div class="stat-label">shown</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat">
+        <span class="stat-num" id="recentCount">0</span>
+        <div class="stat-label">added this week</div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="searchInput" placeholder="Search words...">
+      </div>
+      <button class="btn btn-outline" id="sortAlpha">A–Z</button>
+      <button class="btn btn-outline" id="sortRecent">Recent</button>
+      <button class="btn btn-danger" id="clearAll">Clear all</button>
+    </div>
+
+    <!-- Add word -->
+    <div class="add-row">
+      <input type="text" id="newWordInput" placeholder="Add a word or phrase..." autocomplete="off" spellcheck="false">
+      <button class="btn btn-primary" id="addBtn">Add</button>
+    </div>
+
+    <!-- Word list -->
+    <div class="list-header">
+      <span class="list-count" id="listCountLabel"></span>
+    </div>
+    <div class="word-grid" id="wordGrid"></div>
+
+    <!-- Import / Export -->
+    <div class="io-section">
+      <div class="io-title">Import / Export</div>
+      <div class="io-hint">One word or phrase per line</div>
+      <textarea id="importArea" placeholder="word1&#10;word2&#10;my custom phrase..."></textarea>
+      <div class="io-row">
+        <button class="btn btn-outline" id="importBtn">Import</button>
+        <button class="btn btn-outline" id="exportBtn">Export to clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="dictionary.js"></script>
+</body>
+</html>

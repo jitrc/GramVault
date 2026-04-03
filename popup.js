@@ -294,65 +294,19 @@ languageSelect.addEventListener('change', () => {
 });
 
 // ============================================================
-// DICTIONARY
+// DICTIONARY (summary only — full management in dictionary.html)
 // ============================================================
 
 function loadDictionary() {
   chrome.storage.local.get(['customDictionary'], (data) => {
     const words = data.customDictionary || [];
-    renderDictionary(words);
+    const countEl = document.getElementById('dictCount');
+    if (countEl) countEl.textContent = words.length > 0 ? `(${words.length})` : '';
   });
 }
 
-function renderDictionary(words) {
-  const listEl = document.getElementById('dictWordList');
-  const countEl = document.getElementById('dictCount');
-
-  listEl.innerHTML = '';
-  words.forEach(word => {
-    const div = document.createElement('div');
-    div.className = 'dict-word';
-    div.innerHTML = `<span>${word}</span><button class="dict-remove" data-word="${word}">✕</button>`;
-    listEl.appendChild(div);
-  });
-
-  countEl.textContent = words.length > 0 ? `(${words.length} word${words.length === 1 ? '' : 's'})` : '';
-
-  listEl.querySelectorAll('.dict-remove').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const wordToRemove = btn.dataset.word;
-      chrome.storage.local.get(['customDictionary'], (data) => {
-        const updated = (data.customDictionary || []).filter(w => w !== wordToRemove);
-        chrome.storage.local.set({ customDictionary: updated }, () => renderDictionary(updated));
-      });
-    });
-  });
-}
-
-function addDictionaryWord() {
-  const input = document.getElementById('dictInput');
-  const word = input.value.trim().toLowerCase();
-  if (!word) return;
-  chrome.storage.local.get(['customDictionary'], (data) => {
-    const words = data.customDictionary || [];
-    if (!words.includes(word)) {
-      const updated = [...words, word];
-      chrome.storage.local.set({ customDictionary: updated }, () => renderDictionary(updated));
-    }
-    input.value = '';
-  });
-}
-
-document.getElementById('dictAddBtn').addEventListener('click', addDictionaryWord);
-document.getElementById('dictInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') addDictionaryWord();
-});
-
-document.getElementById('dictToggle').addEventListener('click', () => {
-  const section = document.getElementById('dictSection');
-  const arrow = document.querySelector('#dictToggle .collapse-arrow');
-  section.classList.toggle('hidden');
-  arrow.textContent = section.classList.contains('hidden') ? '▸' : '▾';
+document.getElementById('dictManageBtn').addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
 });
 
 // ============================================================

@@ -78,7 +78,7 @@ function writePNG(width, height, pixels) {
   ]);
 }
 
-// --- Draw GramVault icon ---
+// --- Draw GramVault icon (padlock + G + squiggle) ---
 function drawIcon(size) {
   const px = new Uint8Array(size * size * 4);
 
@@ -125,6 +125,20 @@ function drawIcon(size) {
     }
   }
 
+  // Anti-aliased partial arc
+  function strokeArc(cx, cy, radius, startAngle, sweepAngle, lw, r, g, b, a = 255) {
+    const steps = Math.max(8, Math.ceil(Math.abs(sweepAngle) * radius * 2));
+    for (let i = 0; i < steps; i++) {
+      const a1 = startAngle + sweepAngle * (i / steps);
+      const a2 = startAngle + sweepAngle * ((i + 1) / steps);
+      strokeLine(
+        cx + Math.cos(a1) * radius, cy + Math.sin(a1) * radius,
+        cx + Math.cos(a2) * radius, cy + Math.sin(a2) * radius,
+        lw, r, g, b, a
+      );
+    }
+  }
+
   // Anti-aliased line
   function strokeLine(x0, y0, x1, y1, lw, r, g, b, a = 255) {
     const dx = x1 - x0, dy = y1 - y0;
@@ -165,131 +179,105 @@ function drawIcon(size) {
   }
 
   const s = size;
-  const rad = Math.round(s * 0.18);
+  const bgRad = Math.round(s * 0.1875); // 24/128
 
-  // Draw gradient background (approximated as two-tone)
+  // Background gradient: #4338ca → #1e1b4b (indigo → deep navy)
   for (let y = 0; y < s; y++) {
     const t = y / s;
-    const r = Math.round(49 * (1 - t) + 30 * t);
-    const g = Math.round(46 * (1 - t) + 27 * t);
-    const bl = Math.round(129 * (1 - t) + 75 * t);
+    const br = Math.round(67 * (1 - t) + 30 * t);
+    const bg = Math.round(56 * (1 - t) + 27 * t);
+    const bb = Math.round(202 * (1 - t) + 75 * t);
     for (let x = 0; x < s; x++) {
-      const i = (y * s + x) * 4;
-      px[i] = r; px[i+1] = g; px[i+2] = bl; px[i+3] = 0;
+      const idx = (y * s + x) * 4;
+      px[idx] = br; px[idx+1] = bg; px[idx+2] = bb; px[idx+3] = 0;
     }
   }
 
-  // Clip to rounded rect (set alpha)
+  // Clip background to rounded rect (set alpha)
   for (let y = 0; y < s; y++) {
     for (let x = 0; x < s; x++) {
-      const inR = (() => {
-        if (x >= rad && x < s - rad) return true;
-        if (y >= rad && y < s - rad) return true;
-        const corners = [[rad, rad], [s - rad, rad], [rad, s - rad], [s - rad, s - rad]];
-        for (const [cx, cy] of corners) {
-          if (x < rad && y < rad && !(x === corners[0][0] && y === corners[0][1])) {
-            // handled below
-          }
-        }
-        const dx = Math.max(rad - x, 0, x - (s - rad));
-        const dy = Math.max(rad - y, 0, y - (s - rad));
-        return Math.sqrt(dx * dx + dy * dy) <= rad;
-      })();
-      const dist = (() => {
-        const dx = Math.max(rad - x, 0, x - (s - rad));
-        const dy = Math.max(rad - y, 0, y - (s - rad));
-        return Math.sqrt(dx * dx + dy * dy);
-      })();
-      const alpha = Math.max(0, Math.min(1, rad - dist + 0.5));
-      const i = (y * s + x) * 4;
-      px[i + 3] = Math.round(255 * alpha);
+      const dx = Math.max(bgRad - x, 0, x - (s - bgRad));
+      const dy = Math.max(bgRad - y, 0, y - (s - bgRad));
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const alpha = Math.max(0, Math.min(1, bgRad - dist + 0.5));
+      px[(y * s + x) * 4 + 3] = Math.round(255 * alpha);
     }
   }
 
-  // ── New design: vault ring + bold G + squiggle ──
-  const cx = s * 0.5;
-  const cy = s * 0.47;
-  const vaultR = s * 0.36;   // vault ring radius
-  const lw = s * 0.07;        // vault ring stroke width
+  // ── Padlock design ──
+  // All coordinates in SVG space (128×128), scaled by s/128
 
-  // Gradient: approximate #4338ca → #1e1b4b top-to-bottom
-  for (let y = 0; y < s; y++) {
-    const t = y / s;
-    const r2 = Math.round(67 * (1 - t) + 30 * t);
-    const g2 = Math.round(56 * (1 - t) + 27 * t);
-    const b2 = Math.round(202 * (1 - t) + 75 * t);
-    for (let x = 0; x < s; x++) {
-      const i2 = (y * s + x) * 4;
-      px[i2] = r2; px[i2 + 1] = g2; px[i2 + 2] = b2;
-      // alpha already set by rounded-rect clip above
+  const P = v => v * s / 128; // scale from 128-space
+  const slw = P(size <= 16 ? 9 : 6.5); // stroke line width
+
+  // --- Shackle (U-arch at top) ---
+  const shX1 = P(42), shX2 = P(86);
+  const shTop = P(40), shBot = P(60);
+  const shCx = (shX1 + shX2) / 2;
+  const shR  = (shX2 - shX1) / 2;
+
+  strokeLine(shX1, shBot, shX1, shTop, slw, 255, 255, 255, 230);
+  strokeLine(shX2, shBot, shX2, shTop, slw, 255, 255, 255, 230);
+  // Arc from left (π) sweeping -π (counterclockwise) to right (0)
+  strokeArc(shCx, shTop, shR, Math.PI, -Math.PI, slw, 255, 255, 255, 230);
+
+  // --- Padlock body fill (low opacity) ---
+  const bx = P(22), by = P(54), bw = P(84), bh = P(62), br = P(13);
+  for (let y = Math.floor(by); y < Math.ceil(by + bh); y++) {
+    for (let x = Math.floor(bx); x < Math.ceil(bx + bw); x++) {
+      const dx = Math.max(bx + br - x, 0, x - (bx + bw - br));
+      const dy = Math.max(by + br - y, 0, y - (by + bh - br));
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const alpha = Math.max(0, Math.min(1, br - dist + 0.5));
+      if (alpha > 0) setPixel(x, y, 255, 255, 255, Math.round(33 * alpha));
     }
   }
 
-  // Vault ring (low opacity)
-  strokeCircle(cx, cy, vaultR, lw, 255, 255, 255, 50);
-
-  // 4 cardinal spokes (outside ring edge, short lines)
-  const spokeInner = vaultR + lw * 0.6;
-  const spokeOuter = vaultR + lw * 1.8;
-  if (size >= 32) {
-    for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI) / 2 - Math.PI / 2;
-      strokeLine(
-        cx + Math.cos(angle) * spokeInner, cy + Math.sin(angle) * spokeInner,
-        cx + Math.cos(angle) * spokeOuter, cy + Math.sin(angle) * spokeOuter,
-        lw * 0.55, 255, 255, 255, 130
-      );
-    }
-    // Handle knob right side
-    strokeCircle(cx + vaultR + lw * 2.8, cy, lw * 0.9, lw * 0.5, 255, 255, 255, 165);
-  }
-
-  // Bold "G" letterform — drawn as arc + crossbar
-  // The G arc: a circle from ~top-right, sweeping ~300° counter-clockwise
-  const gCx = cx + s * 0.04;   // slightly right of centre
-  const gCy = cy;
-  const gR = s * 0.22;
-  const glw = s * (size <= 16 ? 0.09 : 0.075);
-
-  // Draw arc by sampling points (300° sweep, starting from 11 o'clock going clockwise)
-  const startAngle = -Math.PI * 0.72;   // ~top-right
-  const endAngle   = Math.PI * 0.72;    // ~bottom-right (same X, mirrored)
-  const arcSteps = Math.ceil(gR * 6);
-  for (let i = 0; i < arcSteps; i++) {
-    const t = i / arcSteps;
-    const a1 = startAngle + (endAngle - startAngle) * t;
-    const a2 = startAngle + (endAngle - startAngle) * (i + 1) / arcSteps;
-    strokeLine(
-      gCx + Math.cos(a1) * gR, gCy + Math.sin(a1) * gR,
-      gCx + Math.cos(a2) * gR, gCy + Math.sin(a2) * gR,
-      glw, 255, 255, 255, 255
-    );
-  }
-
-  // G crossbar: horizontal line from centre-right of G inward
+  // --- Padlock body stroke ---
   if (size >= 24) {
-    const crossY = gCy;
-    const crossX0 = gCx + gR * 0.08;
-    const crossX1 = gCx + gR * 0.95;
-    strokeLine(crossX0, crossY, crossX1, crossY, glw, 255, 255, 255, 255);
+    // 4 straight sides
+    strokeLine(bx + br, by,      bx + bw - br, by,      slw, 255, 255, 255, 230); // top
+    strokeLine(bx + br, by + bh, bx + bw - br, by + bh, slw, 255, 255, 255, 230); // bottom
+    strokeLine(bx,      by + br, bx,      by + bh - br,  slw, 255, 255, 255, 230); // left
+    strokeLine(bx + bw, by + br, bx + bw, by + bh - br,  slw, 255, 255, 255, 230); // right
+    // 4 corner arcs (each sweeps -π/2 counterclockwise)
+    strokeArc(bx + br,      by + br,      br, Math.PI,       -Math.PI / 2, slw, 255, 255, 255, 230);
+    strokeArc(bx + bw - br, by + br,      br, -Math.PI / 2,  -Math.PI / 2, slw, 255, 255, 255, 230);
+    strokeArc(bx + bw - br, by + bh - br, br, 0,             -Math.PI / 2, slw, 255, 255, 255, 230);
+    strokeArc(bx + br,      by + bh - br, br, Math.PI / 2,   -Math.PI / 2, slw, 255, 255, 255, 230);
+  } else {
+    // Small sizes: just stroke circle as approximation
+    strokeCircle(bx + bw / 2, by + bh / 2, bw * 0.42, slw, 255, 255, 255, 180);
   }
 
-  // Squiggly grammar underline — cyan (#67e8f9 = 103,232,249)
+  // --- Bold G letterform ---
+  // Center (60,83)/128, radius 17/128, arc from ~-52° counterclockwise (long way) to 0°
+  const gCx = P(60), gCy = P(83), gR = P(17);
+  const glw = P(size <= 16 ? 10 : 8);
+
+  const gStart = -0.291 * Math.PI;                        // upper-right ~-52°
+  const gSweep = -(2 * Math.PI - 0.291 * Math.PI);        // long CCW arc → ends at 0° (right)
+  strokeArc(gCx, gCy, gR, gStart, gSweep, glw, 255, 255, 255, 255);
+
+  // G crossbar: from right of arc (gCx+gR) leftward to center
+  if (size >= 20) {
+    strokeLine(gCx + gR, gCy, gCx + gR * 0.18, gCy, glw, 255, 255, 255, 255);
+  }
+
+  // --- Cyan squiggly grammar line ---
   if (size >= 32) {
-    const waveY  = cy + s * 0.38;
-    const waveX0 = cx - s * 0.32;
-    const waveX1 = cx + s * 0.32;
-    const waveAmp = s * 0.055;
-    const waveSteps = 120;
-    const waveLw = s * (size <= 32 ? 0.06 : 0.04);
-    for (let i = 0; i < waveSteps; i++) {
-      const t1 = i / waveSteps;
-      const t2 = (i + 1) / waveSteps;
-      const x1 = waveX0 + (waveX1 - waveX0) * t1;
-      const x2 = waveX0 + (waveX1 - waveX0) * t2;
-      const y1 = waveY + Math.sin(t1 * Math.PI * 4) * waveAmp;
-      const y2 = waveY + Math.sin(t2 * Math.PI * 4) * waveAmp;
-      strokeLine(x1, y1, x2, y2, waveLw, 103, 232, 249, 220);
+    const wY  = P(100);
+    const wX0 = P(32), wX1 = P(96);
+    const wAmp = P(8);
+    const wLw = P(size <= 48 ? 5 : 4);
+    const wSteps = 80;
+    for (let i = 0; i < wSteps; i++) {
+      const t1 = i / wSteps, t2 = (i + 1) / wSteps;
+      strokeLine(
+        wX0 + (wX1 - wX0) * t1, wY + Math.sin(t1 * Math.PI * 4) * wAmp,
+        wX0 + (wX1 - wX0) * t2, wY + Math.sin(t2 * Math.PI * 4) * wAmp,
+        wLw, 103, 232, 249, 215
+      );
     }
   }
 

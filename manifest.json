@@ -34,6 +34,7 @@
       "description": "Open grammar checker panel for focused field"
     }
   },
+  "options_page": "dictionary.html",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

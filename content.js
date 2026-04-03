@@ -672,10 +672,14 @@
         e.stopPropagation();
         const word = btn.dataset.word;
         customDictionary.add(word);
-        chrome.storage.local.get(['customDictionary'], (data) => {
+        chrome.storage.local.get(['customDictionary', 'customDictionaryMeta'], (data) => {
           const dict = data.customDictionary || [];
-          if (!dict.includes(word)) dict.push(word);
-          chrome.storage.local.set({ customDictionary: dict });
+          const meta = data.customDictionaryMeta || {};
+          if (!dict.includes(word)) {
+            dict.push(word);
+            meta[word] = Date.now();
+          }
+          chrome.storage.local.set({ customDictionary: dict, customDictionaryMeta: meta });
         });
         const state = getState(el);
         state.ruleErrors = state.ruleErrors.filter(e => e.original.toLowerCase().trim() !== word);
