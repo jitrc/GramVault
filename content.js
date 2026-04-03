@@ -440,25 +440,12 @@
   function updateBadge(el, errors) {
     let badge = badgeMap.get(el);
 
-    if (errors.length === 0) {
-      if (badge) {
-        // Show green check briefly then fade
-        badge.className = 'gc-badge-float gc-badge-ok';
-        badge.innerHTML = '<span class="gc-badge-icon">✓</span>';
-        badge.onclick = null;
-        setTimeout(() => { badge.className = 'gc-badge-float gc-badge-hidden'; }, 2000);
-      }
-      dismissBadgePanel();
-      return;
-    }
-
     if (!badge) {
       badge = document.createElement('div');
       badge.className = 'gc-badge-float';
       document.body.appendChild(badge);
       badgeMap.set(el, badge);
 
-      // Reposition on scroll/resize
       const reposition = () => positionBadge(el, badge);
       window.addEventListener('scroll', reposition, true);
       const ro = new ResizeObserver(reposition);
@@ -469,14 +456,23 @@
       };
     }
 
-    const ruleCount = errors.filter(e => e.source === 'rules').length;
-    const llmCount = errors.filter(e => e.source === 'llm').length;
-    const hasLlm = llmCount > 0;
+    positionBadge(el, badge);
 
+    if (errors.length === 0) {
+      badge.className = 'gc-badge-float gc-badge-ok';
+      badge.innerHTML = '<span class="gc-badge-icon">✓</span>';
+      badge.title = 'No issues — click for actions';
+      badge.onclick = (e) => {
+        e.stopPropagation();
+        toggleBadgePanel(el, errors, badge);
+      };
+      return;
+    }
+
+    const hasLlm = errors.some(e => e.source === 'llm');
     badge.className = `gc-badge-float ${hasLlm ? 'gc-badge-llm-active' : 'gc-badge-error'}`;
     badge.innerHTML = `<span class="gc-badge-count">${errors.length}</span>`;
-    badge.title = `${errors.length} issue${errors.length > 1 ? 's' : ''} found (click to fix)`;
-    positionBadge(el, badge);
+    badge.title = `${errors.length} issue${errors.length > 1 ? 's' : ''} — click to fix`;
 
     badge.onclick = (e) => {
       e.stopPropagation();
@@ -509,9 +505,34 @@
     panel.className = 'gc-badge-panel';
     panel._el = el;
 
-    let html = `<div class="gc-badge-panel-header">${errors.length} issue${errors.length > 1 ? 's' : ''}</div>`;
-    html += '<div class="gc-badge-panel-list">';
+    const text = getText(el);
+    let html = '';
 
+    // --- Header ---
+    html += `<div class="gc-badge-panel-header">${errors.length > 0 ? `${errors.length} issue${errors.length > 1 ? 's' : ''}` : 'No issues'}</div>`;
+
+    // --- Quick Actions toolbar ---
+    html += `
+      <div class="gc-badge-panel-toolbar">
+        <button class="gc-action-btn" data-action="rewrite" title="Rewrite">Rewrite</button>
+        <button class="gc-action-btn" data-action="professional" title="Professional tone">Professional</button>
+        <button class="gc-action-btn" data-action="friendly" title="Friendly tone">Friendly</button>
+        <button class="gc-action-btn" data-action="concise" title="Make concise">Concise</button>
+        <button class="gc-action-btn" data-action="elaborate" title="Elaborate">Elaborate</button>
+        <button class="gc-action-btn" data-action="summarize" title="Summarize">Summarize</button>
+        <button class="gc-action-btn" data-action="bulleted" title="Bullets">Bullets</button>
+        <button class="gc-action-btn gc-action-tone" data-action="toneCheck" title="Check tone">Tone</button>
+      </div>
+    `;
+
+    // --- Tone result area (hidden until tone check runs) ---
+    html += `<div class="gc-tone-area" id="gc-tone-area" style="display:none"></div>`;
+
+    // --- Action result area (hidden until an action runs) ---
+    html += `<div class="gc-action-result-area" id="gc-action-result" style="display:none"></div>`;
+
+    // --- Error list ---
+    html += '<div class="gc-badge-panel-list">';
     errors.forEach((err, i) => {
       const source = err.source === 'llm' ? 'AI' : 'Rules';
       const sourceClass = err.source === 'llm' ? 'gc-badge-src-llm' : 'gc-badge-src-rules';
@@ -556,33 +577,30 @@
       }
     });
 
-    // Fix individual error
+    // --- Wire up fix buttons ---
     panel.querySelectorAll('.gc-badge-panel-fix').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = parseInt(btn.dataset.idx);
-        const fix = btn.dataset.fix;
-        const err = errors[idx];
-        applyFixToElement(el, err, fix);
+        applyFixToElement(el, errors[idx], btn.dataset.fix);
         dismissBadgePanel();
       });
     });
 
-    // Ignore individual error
+    // --- Wire up ignore buttons ---
     panel.querySelectorAll('.gc-badge-panel-dismiss').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = parseInt(btn.dataset.idx);
-        const state = getState(el);
-        // Remove from both rule and llm errors
         const err = errors[idx];
+        const state = getState(el);
         state.ruleErrors = state.ruleErrors.filter(e => e !== err);
         state.llmErrors = state.llmErrors.filter(e => e !== err);
         renderErrors(el);
       });
     });
 
-    // Fix all
+    // --- Wire up fix all ---
     const fixAllBtn = panel.querySelector('.gc-badge-panel-fixall-btn');
     if (fixAllBtn) {
       fixAllBtn.addEventListener('click', (e) => {
@@ -592,10 +610,146 @@
       });
     }
 
+    // --- Wire up quick action buttons ---
+    panel.querySelectorAll('.gc-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        runQuickAction(el, text, action, panel);
+      });
+    });
+
     // Close on outside click
     setTimeout(() => {
       document.addEventListener('click', closeBadgePanelOnOutside, true);
     }, 0);
+  }
+
+  // --- Quick actions from badge panel ---
+
+  function runQuickAction(el, text, action, panel) {
+    if (!text || text.trim().length < 2) return;
+
+    // Show loading in the result area
+    const resultArea = panel.querySelector('#gc-action-result');
+    const toneArea = panel.querySelector('#gc-tone-area');
+
+    if (action === 'toneCheck') {
+      toneArea.style.display = '';
+      toneArea.innerHTML = '<div class="gc-action-loading"><div class="gc-loading-spinner"></div> Checking tone...</div>';
+    } else {
+      resultArea.style.display = '';
+      resultArea.innerHTML = '<div class="gc-action-loading"><div class="gc-loading-spinner"></div> Processing...</div>';
+    }
+
+    // Disable all action buttons while loading
+    panel.querySelectorAll('.gc-action-btn').forEach(b => b.disabled = true);
+
+    debugMessage('action', `Quick action: ${action} on ${text.length} chars`);
+
+    chrome.runtime.sendMessage({ type: 'RUN_ACTION', action, text }, (response) => {
+      // Re-enable buttons
+      panel.querySelectorAll('.gc-action-btn').forEach(b => b.disabled = false);
+
+      if (chrome.runtime.lastError) {
+        debugMessage('error', `Action failed: ${chrome.runtime.lastError.message}`);
+        resultArea.innerHTML = `<div class="gc-action-error">Error: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
+        return;
+      }
+
+      if (response?.error) {
+        debugMessage('error', `Action error: ${response.error}`);
+        if (action === 'toneCheck') {
+          toneArea.innerHTML = `<div class="gc-action-error">Error: ${escapeHtml(response.error)}</div>`;
+        } else {
+          resultArea.innerHTML = `<div class="gc-action-error">Error: ${escapeHtml(response.error)}</div>`;
+        }
+        return;
+      }
+
+      if (action === 'toneCheck') {
+        const tone = response.tone || 'Unknown';
+        const score = response.score || 0;
+        const notes = response.notes || '';
+        const suggestion = response.suggestion || '';
+
+        let toneHtml = `
+          <div class="gc-tone-compact">
+            <span class="gc-tone-badge">${escapeHtml(tone)}</span>
+            <span class="gc-tone-score-bar">
+              <span class="gc-tone-score-fill" style="width:${score * 10}%"></span>
+            </span>
+            <span class="gc-tone-score-num">${score}/10</span>
+          </div>
+        `;
+        if (notes) toneHtml += `<div class="gc-tone-compact-notes">${escapeHtml(notes)}</div>`;
+        if (suggestion) {
+          toneHtml += `
+            <div class="gc-action-result-row">
+              <div class="gc-action-result-text">${escapeHtml(suggestion)}</div>
+              <div class="gc-action-result-btns">
+                <button class="gc-action-apply" data-text="${escapeHtml(suggestion)}">Apply</button>
+                <button class="gc-action-copy" data-text="${escapeHtml(suggestion)}">Copy</button>
+              </div>
+            </div>
+          `;
+        }
+        toneArea.innerHTML = toneHtml;
+        wireResultButtons(panel, el);
+        debugMessage('ok', `Tone: ${tone} (${score}/10)`);
+      } else {
+        const result = response.result || '';
+        resultArea.innerHTML = `
+          <div class="gc-action-result-label">${escapeHtml(action)}</div>
+          <div class="gc-action-result-row">
+            <div class="gc-action-result-text">${escapeHtml(result)}</div>
+            <div class="gc-action-result-btns">
+              <button class="gc-action-apply" data-text="${escapeHtml(result)}">Replace</button>
+              <button class="gc-action-copy" data-text="${escapeHtml(result)}">Copy</button>
+            </div>
+          </div>
+        `;
+        wireResultButtons(panel, el);
+        debugMessage('ok', `Action ${action}: ${result.length} chars returned`);
+      }
+    });
+  }
+
+  function wireResultButtons(panel, el) {
+    panel.querySelectorAll('.gc-action-apply').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const newText = btn.dataset.text;
+        // Replace all text in the element
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+          el.focus();
+          el.select();
+          if (!document.execCommand('insertText', false, newText)) {
+            el.value = newText;
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (el.isContentEditable) {
+          el.focus();
+          document.execCommand('selectAll');
+          if (!document.execCommand('insertText', false, newText)) {
+            el.innerText = newText;
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        dismissBadgePanel();
+        debugMessage('ok', 'Action result applied');
+      });
+    });
+
+    panel.querySelectorAll('.gc-action-copy').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(btn.dataset.text).then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        });
+      });
+    });
   }
 
   function closeBadgePanelOnOutside(e) {
