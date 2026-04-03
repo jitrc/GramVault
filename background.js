@@ -761,6 +761,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'RUN_CHAT') {
+    (async () => {
+      try {
+        const settings = await getSettings();
+        const { originalText, lastResult, history, userMessage } = message;
+
+        const langHint = settings.language !== 'auto'
+          ? `The text is written in ${getLanguageName(settings.language)}. ` : '';
+
+        // Build a single-prompt format that works across all providers
+        const historyLines = history.map(h =>
+          `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`
+        ).join('\n');
+
+        const prompt = `You are a writing assistant. ${langHint}The user is working on the following text.
+
+Original text:
+"""
+${originalText}
+"""
+
+Current version (after edits):
+"""
+${lastResult || originalText}
+"""
+${historyLines ? `\nPrevious conversation:\n${historyLines}\n` : ''}
+User: ${userMessage}
+
+Respond with JSON: {"reply": "your conversational response", "result": "a new version of the full text if you are rewriting it, or empty string if you are just answering a question or explaining"}`;
+
+        const raw = await callProvider(userMessage, prompt, settings);
+        const parsed = parseJsonResponse(raw);
+        sendResponse({
+          reply: parsed.reply || parsed.result || raw,
+          result: parsed.result || '',
+        });
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'RUN_ACTION') {
     (async () => {
       try {

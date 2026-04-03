@@ -785,6 +785,7 @@
         }
         toneArea.innerHTML = toneHtml;
         wireResultButtons(panel, el);
+        if (suggestion) showChatArea(panel, el, text, suggestion);
         debugMessage('ok', `Tone: ${tone} (${score}/10)`);
       } else {
         const result = response.result || '';
@@ -799,9 +800,124 @@
           </div>
         `;
         wireResultButtons(panel, el);
+        showChatArea(panel, el, text, result);
         debugMessage('ok', `Action ${action}: ${result.length} chars returned`);
       }
     });
+  }
+
+  // --- Chat area (follow-up questions after any action result) ---
+
+  function showChatArea(panel, el, originalText, lastResult) {
+    // Remove any existing chat area first
+    const existing = panel.querySelector('.gc-chat-area');
+    if (existing) existing.remove();
+
+    const chatEl = document.createElement('div');
+    chatEl.className = 'gc-chat-area';
+    chatEl.innerHTML = `
+      <div class="gc-chat-header">Follow-up</div>
+      <div class="gc-chat-messages" id="gc-chat-messages"></div>
+      <div class="gc-chat-input-row">
+        <input type="text" class="gc-chat-input" placeholder="Make it shorter, explain why..." autocomplete="off">
+        <button class="gc-chat-send" title="Send">&#x21B5;</button>
+      </div>
+    `;
+
+    // Insert after the result area
+    const resultArea = panel.querySelector('#gc-action-result');
+    if (resultArea) {
+      resultArea.after(chatEl);
+    } else {
+      panel.appendChild(chatEl);
+    }
+
+    const messagesEl = chatEl.querySelector('.gc-chat-messages');
+    const inputEl = chatEl.querySelector('.gc-chat-input');
+    const sendBtn = chatEl.querySelector('.gc-chat-send');
+
+    // Conversation history for this session
+    const history = [];
+    let currentLastResult = lastResult;
+    let isSending = false;
+
+    function addMessage(role, text, resultText) {
+      const msg = document.createElement('div');
+      msg.className = `gc-chat-msg gc-chat-msg-${role}`;
+
+      if (role === 'assistant' && resultText) {
+        msg.innerHTML = `
+          <div class="gc-chat-text">${escapeHtml(text)}</div>
+          <div class="gc-chat-result">
+            <div class="gc-chat-result-text">${escapeHtml(resultText)}</div>
+            <div class="gc-chat-result-btns">
+              <button class="gc-action-apply" data-text="${escapeHtml(resultText)}">Apply</button>
+              <button class="gc-action-copy" data-text="${escapeHtml(resultText)}">Copy</button>
+            </div>
+          </div>
+        `;
+        wireResultButtons(panel, el);
+      } else {
+        msg.innerHTML = `<div class="gc-chat-text">${escapeHtml(text)}</div>`;
+      }
+
+      messagesEl.appendChild(msg);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addTypingIndicator() {
+      const ind = document.createElement('div');
+      ind.className = 'gc-chat-msg gc-chat-msg-assistant gc-chat-typing';
+      ind.innerHTML = '<span></span><span></span><span></span>';
+      messagesEl.appendChild(ind);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return ind;
+    }
+
+    function send() {
+      const userMessage = inputEl.value.trim();
+      if (!userMessage || isSending) return;
+
+      isSending = true;
+      inputEl.value = '';
+      sendBtn.disabled = true;
+      addMessage('user', userMessage);
+      const typing = addTypingIndicator();
+
+      chrome.runtime.sendMessage({
+        type: 'RUN_CHAT',
+        originalText,
+        lastResult: currentLastResult,
+        history,
+        userMessage,
+      }, (response) => {
+        isSending = false;
+        sendBtn.disabled = false;
+        typing.remove();
+
+        if (chrome.runtime.lastError || response?.error) {
+          const errMsg = response?.error || chrome.runtime.lastError?.message || 'Unknown error';
+          addMessage('assistant', `Error: ${errMsg}`, '');
+          return;
+        }
+
+        const reply = response.reply || '';
+        const result = response.result || '';
+
+        // Update context for next turn
+        history.push({ role: 'user', content: userMessage });
+        history.push({ role: 'assistant', content: reply + (result ? `\n\nNew version: ${result}` : '') });
+        if (result) currentLastResult = result;
+
+        addMessage('assistant', reply, result);
+      });
+    }
+
+    sendBtn.addEventListener('click', (e) => { e.stopPropagation(); send(); });
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); send(); }
+    });
+    inputEl.addEventListener('click', (e) => e.stopPropagation());
   }
 
   function wireResultButtons(panel, el) {
