@@ -206,64 +206,91 @@ function drawIcon(size) {
     }
   }
 
+  // ── New design: vault ring + bold G + squiggle ──
   const cx = s * 0.5;
   const cy = s * 0.47;
-  const or = s * 0.27;
-  const lw = s * 0.045;
+  const vaultR = s * 0.36;   // vault ring radius
+  const lw = s * 0.07;        // vault ring stroke width
 
-  // Vault glow (soft fill)
-  fillCircle(cx, cy, or * 1.05, 255, 255, 255, 25);
+  // Gradient: approximate #4338ca → #1e1b4b top-to-bottom
+  for (let y = 0; y < s; y++) {
+    const t = y / s;
+    const r2 = Math.round(67 * (1 - t) + 30 * t);
+    const g2 = Math.round(56 * (1 - t) + 27 * t);
+    const b2 = Math.round(202 * (1 - t) + 75 * t);
+    for (let x = 0; x < s; x++) {
+      const i2 = (y * s + x) * 4;
+      px[i2] = r2; px[i2 + 1] = g2; px[i2 + 2] = b2;
+      // alpha already set by rounded-rect clip above
+    }
+  }
 
-  // Vault ring
-  strokeCircle(cx, cy, or, lw, 255, 255, 255, 230);
+  // Vault ring (low opacity)
+  strokeCircle(cx, cy, vaultR, lw, 255, 255, 255, 50);
 
-  // 4 cardinal spokes
-  const ir = or * 0.55;
-  for (let i = 0; i < 4; i++) {
-    const angle = (i * Math.PI) / 2;
+  // 4 cardinal spokes (outside ring edge, short lines)
+  const spokeInner = vaultR + lw * 0.6;
+  const spokeOuter = vaultR + lw * 1.8;
+  if (size >= 32) {
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2 - Math.PI / 2;
+      strokeLine(
+        cx + Math.cos(angle) * spokeInner, cy + Math.sin(angle) * spokeInner,
+        cx + Math.cos(angle) * spokeOuter, cy + Math.sin(angle) * spokeOuter,
+        lw * 0.55, 255, 255, 255, 130
+      );
+    }
+    // Handle knob right side
+    strokeCircle(cx + vaultR + lw * 2.8, cy, lw * 0.9, lw * 0.5, 255, 255, 255, 165);
+  }
+
+  // Bold "G" letterform — drawn as arc + crossbar
+  // The G arc: a circle from ~top-right, sweeping ~300° counter-clockwise
+  const gCx = cx + s * 0.04;   // slightly right of centre
+  const gCy = cy;
+  const gR = s * 0.22;
+  const glw = s * (size <= 16 ? 0.09 : 0.075);
+
+  // Draw arc by sampling points (300° sweep, starting from 11 o'clock going clockwise)
+  const startAngle = -Math.PI * 0.72;   // ~top-right
+  const endAngle   = Math.PI * 0.72;    // ~bottom-right (same X, mirrored)
+  const arcSteps = Math.ceil(gR * 6);
+  for (let i = 0; i < arcSteps; i++) {
+    const t = i / arcSteps;
+    const a1 = startAngle + (endAngle - startAngle) * t;
+    const a2 = startAngle + (endAngle - startAngle) * (i + 1) / arcSteps;
     strokeLine(
-      cx + Math.cos(angle) * ir, cy + Math.sin(angle) * ir,
-      cx + Math.cos(angle) * or * 0.78, cy + Math.sin(angle) * or * 0.78,
-      lw * 0.75, 255, 255, 255, 220
+      gCx + Math.cos(a1) * gR, gCy + Math.sin(a1) * gR,
+      gCx + Math.cos(a2) * gR, gCy + Math.sin(a2) * gR,
+      glw, 255, 255, 255, 255
     );
   }
 
-  // Center dot
-  fillCircle(cx, cy, s * 0.048, 255, 255, 255, 255);
+  // G crossbar: horizontal line from centre-right of G inward
+  if (size >= 24) {
+    const crossY = gCy;
+    const crossX0 = gCx + gR * 0.08;
+    const crossX1 = gCx + gR * 0.95;
+    strokeLine(crossX0, crossY, crossX1, crossY, glw, 255, 255, 255, 255);
+  }
 
-  // Handle (right side knob)
-  strokeCircle(cx + or * 0.78, cy, s * 0.055, lw * 0.85, 255, 255, 255, 220);
-
-  // "GV" text for larger icons (rough pixel letters)
-  if (size >= 48) {
-    const textY = s * 0.84;
-    const textX = s * 0.5;
-    const fSize = s * 0.165;
-    // Approximate text by drawing a bold line pattern — simplified "GV" mark
-    // Just draw two diagonal lines for "V" and a rounded "G" bracket
-    const vTop = textY - fSize * 0.45;
-    const vBot = textY + fSize * 0.45;
-    const vMid = textY + fSize * 0.1;
-    const vLeft = textX - fSize * 0.35;
-    const vRight = textX + fSize * 0.35;
-    const vCenter = textX + fSize * 0.02;
-
-    // G shape (left half): arc bracket
-    const gCx = textX - fSize * 0.42;
-    const gR = fSize * 0.38;
-    strokeCircle(gCx, textY, gR, lw * 0.75, 255, 255, 255, 210);
-    // Cover right half of G circle to make it look like "C"
-    fillRect(
-      Math.floor(gCx), Math.floor(textY - gR - 2),
-      Math.floor(gCx + gR + 4), Math.floor(textY + gR + 2),
-      49, 46, 129, 255
-    );
-    // G crossbar
-    strokeLine(gCx + 1, textY + 1, gCx + gR * 0.85, textY + 1, lw * 0.65, 255, 255, 255, 210);
-
-    // V shape (right half)
-    strokeLine(vCenter - fSize * 0.28, vTop, vCenter, vBot, lw * 0.75, 255, 255, 255, 210);
-    strokeLine(vCenter, vBot, vCenter + fSize * 0.28, vTop, lw * 0.75, 255, 255, 255, 210);
+  // Squiggly grammar underline — cyan (#67e8f9 = 103,232,249)
+  if (size >= 32) {
+    const waveY  = cy + s * 0.38;
+    const waveX0 = cx - s * 0.32;
+    const waveX1 = cx + s * 0.32;
+    const waveAmp = s * 0.055;
+    const waveSteps = 120;
+    const waveLw = s * (size <= 32 ? 0.06 : 0.04);
+    for (let i = 0; i < waveSteps; i++) {
+      const t1 = i / waveSteps;
+      const t2 = (i + 1) / waveSteps;
+      const x1 = waveX0 + (waveX1 - waveX0) * t1;
+      const x2 = waveX0 + (waveX1 - waveX0) * t2;
+      const y1 = waveY + Math.sin(t1 * Math.PI * 4) * waveAmp;
+      const y2 = waveY + Math.sin(t2 * Math.PI * 4) * waveAmp;
+      strokeLine(x1, y1, x2, y2, waveLw, 103, 232, 249, 220);
+    }
   }
 
   return writePNG(size, size, px);
