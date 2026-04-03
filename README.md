@@ -1,6 +1,13 @@
-# GramVault
+<p align="center">
+  <img src="icons/icon128.png" width="96" alt="GramVault logo" />
+</p>
 
-Chrome extension for real-time grammar checking powered by local or cloud LLMs. Works like Grammarly but your text stays private — locked in your vault.
+<h1 align="center">GramVault</h1>
+
+<p align="center">
+  Chrome extension for real-time grammar checking powered by local or cloud LLMs.<br>
+  Works like Grammarly but your text stays private — locked in your vault.
+</p>
 
 ## Features
 
