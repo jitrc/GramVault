@@ -191,9 +191,11 @@
       elementState.set(el, {
         rulesTimer: null,
         llmTimer: null,
+        toneTimer: null,
         ruleErrors: [],
         llmErrors: [],
         mergedErrors: [],
+        toneResult: null,
         overlay: null,
         resizeObserver: null,
         listening: false,
@@ -455,7 +457,9 @@
   // ============================================================
 
   const badgeMap = new WeakMap(); // el -> badge element
+  const toneBadgeMap = new WeakMap(); // el -> tone badge element
   let activeBadgePanel = null;
+  let activeTonePopup = null;
 
   function updateBadge(el, errors) {
     let badge = badgeMap.get(el);
@@ -520,6 +524,170 @@
     if (rect.right - 36 < rect.left) {
       badge.style.left = (rect.right - 36) + 'px';
     }
+  }
+
+  // ============================================================
+  // TONE BADGE (auto tone indicator)
+  // ============================================================
+
+  const TONE_COLORS = {
+    formal: '#6366f1',
+    professional: '#6366f1',
+    academic: '#6366f1',
+    assertive: '#8b5cf6',
+    diplomatic: '#8b5cf6',
+    friendly: '#22c55e',
+    casual: '#22c55e',
+    warm: '#22c55e',
+    conversational: '#22c55e',
+    enthusiastic: '#f97316',
+    excited: '#f97316',
+    playful: '#f97316',
+    aggressive: '#ef4444',
+    angry: '#ef4444',
+    harsh: '#ef4444',
+    negative: '#f59e0b',
+    sad: '#f59e0b',
+    anxious: '#f59e0b',
+    neutral: '#64748b',
+    informative: '#64748b',
+    objective: '#64748b',
+  };
+
+  function getToneColor(tone) {
+    if (!tone) return '#64748b';
+    const key = tone.toLowerCase().split(/[\s,/]+/)[0];
+    return TONE_COLORS[key] || '#64748b';
+  }
+
+  function getToneLabel(tone) {
+    if (!tone) return '...';
+    // Capitalize first letter, max 8 chars
+    const label = tone.charAt(0).toUpperCase() + tone.slice(1).toLowerCase();
+    return label.length > 8 ? label.slice(0, 7) + '…' : label;
+  }
+
+  function positionToneBadge(el, toneBadge) {
+    const rect = el.getBoundingClientRect();
+    toneBadge.style.position = 'fixed';
+    toneBadge.style.top = (rect.bottom - 28) + 'px';
+    // Position left of grammar badge (grammar badge is 28px wide at right-36)
+    toneBadge.style.left = (rect.right - 36 - 6 - toneBadge.offsetWidth) + 'px';
+  }
+
+  function updateToneBadge(el, toneResult, loading) {
+    let badge = toneBadgeMap.get(el);
+
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'gc-tone-badge-float';
+      document.body.appendChild(badge);
+      toneBadgeMap.set(el, badge);
+
+      const reposition = () => positionToneBadge(el, badge);
+      window.addEventListener('scroll', reposition, true);
+      const ro = new ResizeObserver(reposition);
+      ro.observe(el);
+    }
+
+    if (loading) {
+      badge.className = 'gc-tone-badge-float gc-tone-badge-loading';
+      badge.innerHTML = '<span class="gc-tone-badge-label">Tone…</span>';
+      badge.title = 'Checking tone…';
+      badge.onclick = null;
+    } else if (toneResult) {
+      const color = getToneColor(toneResult.tone);
+      badge.className = 'gc-tone-badge-float';
+      badge.style.background = color;
+      badge.innerHTML = `<span class="gc-tone-badge-label">${getToneLabel(toneResult.tone)}</span>`;
+      badge.title = `Tone: ${toneResult.tone} (${toneResult.score}/10) — click for details`;
+      badge.onclick = (e) => {
+        e.stopPropagation();
+        toggleTonePopup(el, badge, toneResult);
+      };
+    } else {
+      badge.className = 'gc-tone-badge-float gc-tone-badge-hidden';
+      badge.onclick = null;
+    }
+
+    // Defer positioning until badge width is known
+    requestAnimationFrame(() => positionToneBadge(el, badge));
+  }
+
+  function toggleTonePopup(el, badge, toneResult) {
+    if (activeTonePopup) {
+      activeTonePopup.remove();
+      activeTonePopup = null;
+      return;
+    }
+    const popup = document.createElement('div');
+    popup.className = 'gc-tone-popup';
+
+    const color = getToneColor(toneResult.tone);
+    const scoreWidth = Math.round((toneResult.score / 10) * 100);
+
+    popup.innerHTML = `
+      <div class="gc-tone-popup-title" style="color:${color}">${escapeHtml(toneResult.tone)}</div>
+      <div class="gc-tone-popup-score-row">
+        <div class="gc-tone-popup-bar">
+          <div class="gc-tone-popup-bar-fill" style="width:${scoreWidth}%;background:${color}"></div>
+        </div>
+        <span class="gc-tone-popup-score-num">${toneResult.score}/10</span>
+      </div>
+      ${toneResult.notes ? `<div class="gc-tone-popup-notes">${escapeHtml(toneResult.notes)}</div>` : ''}
+    `;
+
+    const badgeRect = badge.getBoundingClientRect();
+    popup.style.position = 'fixed';
+    popup.style.bottom = (window.innerHeight - badgeRect.top + 4) + 'px';
+    popup.style.left = badgeRect.left + 'px';
+    document.body.appendChild(popup);
+    activeTonePopup = popup;
+
+    // Keep in viewport horizontally
+    requestAnimationFrame(() => {
+      const pr = popup.getBoundingClientRect();
+      if (pr.right > window.innerWidth - 8) {
+        popup.style.left = (window.innerWidth - pr.width - 8) + 'px';
+      }
+    });
+
+    setTimeout(() => {
+      document.addEventListener('click', closeTonePopupOnOutside, true);
+    }, 0);
+  }
+
+  function closeTonePopupOnOutside(e) {
+    if (activeTonePopup && !activeTonePopup.contains(e.target)) {
+      activeTonePopup.remove();
+      activeTonePopup = null;
+      document.removeEventListener('click', closeTonePopupOnOutside, true);
+    }
+  }
+
+  // ============================================================
+  // AUTO TONE CHECK
+  // ============================================================
+
+  function requestToneCheck(el, text) {
+    if (!text || text.trim().length < 10) return;
+    updateToneBadge(el, null, true); // show loading
+    debugMessage('action', `Auto tone check: ${text.length} chars`);
+    chrome.runtime.sendMessage({ type: 'RUN_ACTION', action: 'toneCheck', text }, (response) => {
+      if (chrome.runtime.lastError || !response || response.error) {
+        updateToneBadge(el, null, false); // hide on error
+        return;
+      }
+      const toneResult = {
+        tone: response.tone || 'Unknown',
+        score: response.score || 0,
+        notes: response.notes || '',
+      };
+      const state = getState(el);
+      state.toneResult = toneResult;
+      updateToneBadge(el, toneResult, false);
+      debugMessage('ok', `Tone: ${toneResult.tone} (${toneResult.score}/10)`);
+    });
   }
 
   function toggleBadgePanel(el, errors, badge) {
@@ -630,7 +798,12 @@
         sel.appendChild(opt);
       });
       sel.addEventListener('change', () => {
-        chrome.storage.local.set({ model: sel.value });
+        const newModel = sel.value;
+        chrome.storage.local.get(['providerModels', 'provider'], (data) => {
+          const providerModels = data.providerModels || {};
+          providerModels[data.provider || 'ollama'] = newModel;
+          chrome.storage.local.set({ model: newModel, providerModels });
+        });
       });
     });
 
@@ -1327,6 +1500,9 @@
           if (response.errors.length > 0) trackStat('errorsFound', response.errors.length);
           debugMessage('ok', `LLM: ${response.errors.length} errors in ${ms}ms`, response.errors.length > 0 ? response.errors.map(e => `"${e.original}" → ${e.suggestions.join('/')}`).join(', ') : null);
           renderErrors(el);
+          // Auto-trigger tone check after grammar check
+          clearTimeout(state.toneTimer);
+          state.toneTimer = setTimeout(() => requestToneCheck(el, text), 300);
         } else {
           debugMessage('warn', `LLM: unexpected response (${ms}ms)`, JSON.stringify(response).slice(0, 200));
         }

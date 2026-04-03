@@ -752,9 +752,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       const settings = await getSettings();
       const result = await fetchModels(settings.provider, settings);
+      // Resolve current model the same way as the popup: per-provider first, then global fallback
+      const currentModel = (settings.providerModels || {})[settings.provider] || settings.model || '';
       sendResponse({
         models: result.models || [],
-        currentModel: settings.model || '',
+        currentModel,
         connected: result.connected,
       });
     })();

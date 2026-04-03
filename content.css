@@ -202,6 +202,111 @@
   line-height: 1;
 }
 
+/* ============================================================
+   TONE BADGE (auto tone indicator pill)
+   ============================================================ */
+
+.gc-tone-badge-float {
+  position: fixed;
+  z-index: 2147483647;
+  height: 24px;
+  min-width: 46px;
+  padding: 0 8px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s, opacity 0.25s, background 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+}
+
+.gc-tone-badge-float:hover {
+  transform: scale(1.06);
+}
+
+.gc-tone-badge-label {
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.gc-tone-badge-loading {
+  background: #94a3b8 !important;
+  animation: gc-tone-pulse 1.2s ease-in-out infinite;
+}
+
+.gc-tone-badge-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes gc-tone-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Tone popup (shown on badge click) */
+.gc-tone-popup {
+  position: fixed;
+  z-index: 2147483647;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+  padding: 12px 14px;
+  width: 210px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  animation: gc-fade-in 0.15s ease-out;
+}
+
+.gc-tone-popup-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.gc-tone-popup-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gc-tone-popup-bar {
+  flex: 1;
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gc-tone-popup-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.gc-tone-popup-score-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.gc-tone-popup-notes {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.45;
+}
+
 /* Badge panel (error list) */
 .gc-badge-panel {
   position: fixed;
