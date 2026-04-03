@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <h1>Grammar Checker</h1>
+      <div class="header-right">
+        <div class="status-dot" id="statusDot" title="Checking..."></div>
+      </div>
+    </div>
+
+    <!-- Enable/Disable -->
+    <div class="section">
+      <label class="toggle-label">
+        <span>Enabled</span>
+        <input type="checkbox" id="enableToggle" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <!-- Provider Selection -->
+    <div class="section">
+      <label class="section-label">Provider</label>
+      <select id="providerSelect"></select>
+    </div>
+
+    <!-- API Key (shown for cloud providers) -->
+    <div class="section" id="apiKeySection" style="display:none">
+      <label class="section-label">API Key</label>
+      <div class="input-row">
+        <input type="password" id="apiKeyInput" placeholder="sk-..." autocomplete="off">
+        <button id="apiKeyToggle" class="btn-icon" title="Show/hide">👁</button>
+      </div>
+    </div>
+
+    <!-- Custom Endpoint -->
+    <div class="section" id="endpointSection">
+      <label class="section-label">Endpoint</label>
+      <input type="text" id="endpointInput" placeholder="http://localhost:11434">
+    </div>
+
+    <!-- Model Selection -->
+    <div class="section">
+      <label class="section-label">Model</label>
+      <div class="input-row">
+        <select id="modelSelect">
+          <option value="">Loading...</option>
+        </select>
+        <button id="refreshModels" class="btn-icon" title="Refresh models">↻</button>
+      </div>
+      <div id="modelHint" class="hint"></div>
+    </div>
+
+    <!-- LLM Frequency -->
+    <div class="section">
+      <label class="section-label">LLM Check Frequency</label>
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="frequency" value="on-pause" checked>
+          <span>On pause (2s)</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="frequency" value="on-sentence">
+          <span>On sentence end</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="frequency" value="manual">
+          <span>Manual only</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="frequency" value="disabled">
+          <span>Disabled (rules only)</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Debug Panel Toggle -->
+    <div class="section">
+      <label class="toggle-label">
+        <span>Debug Panel</span>
+        <input type="checkbox" id="debugToggle" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <!-- Legend & Context Menu Hint -->
+    <div class="section legend">
+      <span class="legend-item"><span class="legend-dot red"></span> Rule-based</span>
+      <span class="legend-item"><span class="legend-dot blue"></span> AI-powered</span>
+    </div>
+
+    <div class="section hint-box">
+      Right-click selected text for: Rewrite, Summarize, Professional tone, and more.
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

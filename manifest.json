@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Local Grammar Checker",
+  "version": "0.2.0",
+  "description": "Offline grammar checker powered by local or cloud LLMs with instant rule-based checking",
+  "permissions": ["storage", "activeTab", "contextMenus"],
+  "host_permissions": [
+    "http://localhost:11434/*",
+    "http://localhost:1234/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://openrouter.ai/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["rules.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

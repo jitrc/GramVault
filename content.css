@@ -1,0 +1,426 @@
+/* content.css — Visual styling for grammar checker overlays, errors, and popups */
+
+/* Wrapper for textarea + overlay */
+.gc-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* Mirror overlay for textarea — positioned fixed over the textarea */
+.gc-overlay {
+  position: fixed;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: transparent !important;
+  background: transparent !important;
+  z-index: 2147483646;
+  margin: 0;
+  border: none !important;
+  caret-color: transparent;
+}
+
+/* Rule-based errors (red) */
+.gc-error {
+  text-decoration: underline wavy #e53e3e;
+  text-decoration-skip-ink: none;
+  background-color: rgba(229, 62, 62, 0.08);
+  border-radius: 1px;
+  cursor: pointer;
+  position: relative;
+}
+
+/* LLM errors (blue) */
+.gc-error-llm {
+  text-decoration: underline wavy #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Suggestion popup */
+.gc-popup {
+  position: fixed;
+  z-index: 2147483647;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 10px 14px;
+  max-width: 340px;
+  min-width: 180px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #1a202c;
+  line-height: 1.4;
+  animation: gc-fade-in 0.15s ease-out;
+}
+
+@keyframes gc-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Popup header with badge */
+.gc-popup-header {
+  margin-bottom: 6px;
+}
+
+/* Source badges */
+.gc-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gc-badge-rules {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.gc-badge-llm {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+/* Error message */
+.gc-popup-message {
+  color: #4a5568;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+
+/* Suggestions container */
+.gc-popup-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+/* Suggestion buttons */
+.gc-popup-suggestion {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.gc-popup-suggestion:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.gc-popup-suggestion:active {
+  background: #bbf7d0;
+}
+
+/* Dismiss button */
+.gc-popup-dismiss {
+  display: block;
+  width: 100%;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+.gc-popup-dismiss:hover {
+  color: #64748b;
+}
+
+/* ============================================================
+   CONTEXT MENU ACTION POPUP
+   ============================================================ */
+
+.gc-context-popup {
+  position: fixed;
+  z-index: 2147483647;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
+  padding: 14px 16px;
+  max-width: 440px;
+  min-width: 240px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #1a202c;
+  line-height: 1.5;
+  animation: gc-fade-in 0.15s ease-out;
+}
+
+.gc-context-popup.gc-context-error {
+  border-color: #fecaca;
+}
+
+.gc-context-header {
+  margin-bottom: 10px;
+}
+
+.gc-context-preview {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+  color: #334155;
+}
+
+.gc-context-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.gc-context-actions .gc-popup-dismiss {
+  display: inline;
+  width: auto;
+  border-top: none;
+  margin-top: 0;
+  padding: 4px 10px;
+}
+
+.gc-context-copy {
+  padding: 4px 10px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+
+.gc-context-copy:hover {
+  background: #e2e8f0;
+}
+
+.gc-context-section {
+  margin-top: 10px;
+}
+
+.gc-context-info {
+  background: #fefce8;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #92400e;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.gc-context-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+/* Tone check */
+.gc-tone-result {
+  padding: 8px 0;
+}
+
+.gc-tone-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.gc-tone-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 2px 0 6px;
+}
+
+.gc-tone-score {
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.gc-tone-notes {
+  font-size: 12.5px;
+  color: #64748b;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   LOADING INDICATOR
+   ============================================================ */
+
+.gc-loading {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 10px 16px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  animation: gc-fade-in 0.15s ease-out;
+}
+
+.gc-loading-cancel {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  margin-left: 4px;
+  font-family: inherit;
+}
+
+.gc-loading-cancel:hover {
+  color: #ffffff;
+}
+
+.gc-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: gc-spin 0.6s linear infinite;
+}
+
+@keyframes gc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   DEBUG PANEL
+   ============================================================ */
+
+#gc-debug-panel {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  width: 380px;
+  max-height: 350px;
+  z-index: 2147483647;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#gc-debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #1e293b;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid #334155;
+  font-weight: 600;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+#gc-debug-header:active {
+  cursor: grabbing;
+}
+
+#gc-debug-header button {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: inherit;
+}
+
+#gc-debug-header button:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+#gc-debug-status {
+  padding: 6px 10px;
+  background: #1a2332;
+  border-bottom: 1px solid #334155;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: #94a3b8;
+}
+
+#gc-debug-status b {
+  color: #cbd5e1;
+}
+
+#gc-debug-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 10px;
+  max-height: 220px;
+}
+
+.gc-debug-entry {
+  padding: 2px 0;
+  border-bottom: 1px solid #1e293b;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.gc-debug-data {
+  color: #64748b;
+  font-size: 10px;
+  margin-top: 1px;
+  padding-left: 8px;
+  white-space: pre-wrap;
+  max-height: 60px;
+  overflow-y: auto;
+}
