@@ -136,7 +136,7 @@
   chrome.storage.local.get(['debugPanel'], (data) => {
     if (data.debugPanel === true) {
       createDebugPanel();
-      debugMessage('info', 'Grammar Checker initializing...');
+      debugMessage('info', 'GramVault initializing...');
     }
   });
 
@@ -1678,5 +1678,5 @@
     }
   });
 
-  console.log('[GC] Local Grammar Checker loaded');
+  console.log('[GV] GramVault loaded');
 })();

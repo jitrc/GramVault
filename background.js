@@ -563,7 +563,7 @@ function setupContextMenus() {
     // Parent menu
     chrome.contextMenus.create({
       id: 'gc-parent',
-      title: 'Grammar Checker',
+      title: 'GramVault',
       contexts: ['selection', 'editable'],
     });
 
@@ -607,7 +607,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     await chrome.tabs.sendMessage(tabId, { type: 'CONTEXT_ACTION_START', action });
   } catch (e) {
     // Content script may not be injected on this page
-    console.warn('[GC] Could not reach content script:', e.message);
+    console.warn('[GV] Could not reach content script:', e.message);
     return;
   }
 
@@ -642,7 +642,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       });
     }
   } catch (e) {
-    console.error('[GC] Context action failed:', e);
+    console.error('[GV] Context action failed:', e);
     try {
       await chrome.tabs.sendMessage(tabId, {
         type: 'CONTEXT_ACTION_ERROR',
@@ -685,7 +685,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const errors = validateErrors(parsed.errors || [], message.text);
         sendResponse({ type: 'GRAMMAR_RESULT', errors });
       } catch (e) {
-        console.error('[GC] Grammar check failed:', e);
+        console.error('[GV] Grammar check failed:', e);
         sendResponse({ type: 'GRAMMAR_RESULT', errors: [], error: e.message });
       } finally {
         if (tabId) inflightRequests.delete(tabId);
@@ -805,13 +805,13 @@ chrome.runtime.onInstalled.addListener(async () => {
         enabled: true,
         llmFrequency: 'on-pause',
       });
-      console.log(`[GC] Auto-selected: ${localProvider} / ${models[0].name}`);
+      console.log(`[GV] Auto-selected: ${localProvider} / ${models[0].name}`);
       return;
     }
   }
 
   await chrome.storage.local.set({ enabled: true, llmFrequency: 'on-pause', provider: 'ollama' });
-  console.log('[GC] No local provider found, rule-based checking only');
+  console.log('[GV] No local provider found, rule-based checking only');
 });
 
 // Re-create context menus on startup (service worker can restart)

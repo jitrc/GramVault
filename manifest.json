@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Local Grammar Checker",
-  "version": "0.2.0",
-  "description": "Offline grammar checker powered by local or cloud LLMs with instant rule-based checking",
+  "name": "GramVault",
+  "version": "0.3.0",
+  "description": "Private grammar checker powered by local or cloud LLMs — your text never leaves your device",
   "permissions": ["storage", "activeTab", "contextMenus"],
   "host_permissions": [
     "http://localhost:11434/*",

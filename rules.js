@@ -458,7 +458,7 @@ const GrammarRules = (() => {
         allErrors.push(...errors);
       } catch (e) {
         // Silently skip broken rules
-        console.warn(`[GC] Rule "${rule.name}" failed:`, e);
+        console.warn(`[GV] Rule "${rule.name}" failed:`, e);
       }
     }
 

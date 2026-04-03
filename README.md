@@ -1,17 +1,26 @@
-# Local Grammar Checker
+# GramVault
 
-Chrome extension for real-time grammar checking powered by local or cloud LLMs. Works like Grammarly but your text stays private.
+Chrome extension for real-time grammar checking powered by local or cloud LLMs. Works like Grammarly but your text stays private — locked in your vault.
 
 ## Features
 
 - **Two-tier checking**: Instant rule-based checks (150ms) + LLM deep analysis (configurable)
 - **Floating badge**: Grammarly-style error count badge on every text field — click to fix
+- **Diff view**: Each error shows original ~~struck through~~ → suggested fix inline
+- **Severity levels**: Critical / Warning / Suggestion — color-coded dots per issue
 - **Quick actions**: Rewrite, Professional, Friendly, Concise, Elaborate, Summarize, Bullets, Tone Check — all from the badge panel
-- **Right-click menu**: Select text and use Grammar Checker context menu for any action
+- **Model switcher**: Change model directly from the badge panel without opening settings
+- **Batch check**: "Check page" scans all text fields on the current page at once
+- **Right-click menu**: Select text and use GramVault context menu for any action
 - **Fix all**: One-click to apply all grammar fixes at once
 - **Tone check**: Detects tone with score bar and rewrite suggestions
+- **Custom dictionary**: Add words to skip (technical terms, names, acronyms)
+- **Multi-language**: English, Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese
+- **Writing stats**: Daily check count, errors found, and fixes applied
+- **Keyboard shortcut**: `Ctrl+Shift+G` (Mac: `MacCtrl+Shift+G`) opens the badge panel
 - **Multi-provider**: Ollama, LM Studio, OpenAI, Anthropic, Gemini, OpenRouter
-- **Local first**: Prioritizes local providers, small models sorted by speed
+- **Local first**: Prioritizes local providers — text never leaves your device
+- **iframe support**: Works in Gmail compose, Outlook web, and embedded editors
 - **Debug panel**: Floating log panel for troubleshooting (toggle in settings)
 
 ## Setup
@@ -44,9 +53,11 @@ launchctl setenv OLLAMA_ORIGINS '*'
 
 Click the extension icon to open settings:
 - **Provider**: Choose Ollama, LM Studio, or a cloud provider
+- **Language**: Set your writing language (default: Auto-detect)
 - **Model**: Auto-detected from your provider, small models recommended
 - **LLM Frequency**: How often the LLM runs (on pause, on sentence end, manual, or disabled)
 - **API Key**: Required for cloud providers only
+- **Custom Dictionary**: Add words to ignore (technical terms, names, etc.)
 
 ## Usage
 
@@ -55,12 +66,17 @@ Type in any text field — rule-based errors appear instantly (red outline), LLM
 
 ### Badge panel
 Click the floating badge (bottom-right of text fields) to:
-- See all errors with one-click fix buttons
+- See all errors with diff view (~~original~~ → fix) and severity dots
+- Switch model without opening popup
 - Run quick actions (Rewrite, Professional, Tone, etc.)
+- Batch-check all fields on the page
 - Fix all issues at once
 
+### Keyboard shortcut
+`Ctrl+Shift+G` (Mac: `MacCtrl+Shift+G`) opens the badge panel for the focused field.
+
 ### Right-click menu
-Select text, right-click > **Grammar Checker** for:
+Select text, right-click > **GramVault** for:
 - Check Grammar (with auto-correct)
 - Rewrite / Make Professional / Make Friendly / Make Concise
 - Elaborate / Summarize / Convert to Bullets / Reformat
@@ -89,6 +105,9 @@ These run instantly with zero latency:
 - Subject-verb agreement (simple cases)
 - Unclosed quotes
 - Common confusions (its/it's)
+- Homophones (then/than)
+- Gender-neutral language suggestions
+- Run-on sentence detection
 
 ## Files
 
