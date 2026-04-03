@@ -14,6 +14,7 @@ const refreshModels = document.getElementById('refreshModels');
 const modelHint = document.getElementById('modelHint');
 const frequencyRadios = document.querySelectorAll('input[name="frequency"]');
 const cloudWarningSection = document.getElementById('cloudWarningSection');
+const languageSelect = document.getElementById('languageSelect');
 
 // State
 let providers = [];
@@ -77,10 +78,19 @@ async function init() {
   providerSelect.value = currentSettings.provider || 'ollama';
   frequencyRadios.forEach(r => { r.checked = r.value === currentSettings.llmFrequency; });
 
+  // Language selector
+  languageSelect.value = currentSettings.language || 'auto';
+
   // Update UI for selected provider
   updateProviderUI();
   loadModels();
   checkConnection();
+
+  // Dictionary
+  loadDictionary();
+
+  // Stats
+  loadStats();
 }
 
 function getProviderDef(key) {
@@ -278,6 +288,100 @@ frequencyRadios.forEach(radio => {
     chrome.storage.local.set({ llmFrequency: radio.value });
   });
 });
+
+languageSelect.addEventListener('change', () => {
+  chrome.storage.local.set({ language: languageSelect.value });
+});
+
+// ============================================================
+// DICTIONARY
+// ============================================================
+
+function loadDictionary() {
+  chrome.storage.local.get(['customDictionary'], (data) => {
+    const words = data.customDictionary || [];
+    renderDictionary(words);
+  });
+}
+
+function renderDictionary(words) {
+  const listEl = document.getElementById('dictWordList');
+  const countEl = document.getElementById('dictCount');
+
+  listEl.innerHTML = '';
+  words.forEach(word => {
+    const div = document.createElement('div');
+    div.className = 'dict-word';
+    div.innerHTML = `<span>${word}</span><button class="dict-remove" data-word="${word}">✕</button>`;
+    listEl.appendChild(div);
+  });
+
+  countEl.textContent = words.length > 0 ? `(${words.length} word${words.length === 1 ? '' : 's'})` : '';
+
+  listEl.querySelectorAll('.dict-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const wordToRemove = btn.dataset.word;
+      chrome.storage.local.get(['customDictionary'], (data) => {
+        const updated = (data.customDictionary || []).filter(w => w !== wordToRemove);
+        chrome.storage.local.set({ customDictionary: updated }, () => renderDictionary(updated));
+      });
+    });
+  });
+}
+
+function addDictionaryWord() {
+  const input = document.getElementById('dictInput');
+  const word = input.value.trim().toLowerCase();
+  if (!word) return;
+  chrome.storage.local.get(['customDictionary'], (data) => {
+    const words = data.customDictionary || [];
+    if (!words.includes(word)) {
+      const updated = [...words, word];
+      chrome.storage.local.set({ customDictionary: updated }, () => renderDictionary(updated));
+    }
+    input.value = '';
+  });
+}
+
+document.getElementById('dictAddBtn').addEventListener('click', addDictionaryWord);
+document.getElementById('dictInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addDictionaryWord();
+});
+
+document.getElementById('dictToggle').addEventListener('click', () => {
+  const section = document.getElementById('dictSection');
+  const arrow = document.querySelector('#dictToggle .collapse-arrow');
+  section.classList.toggle('hidden');
+  arrow.textContent = section.classList.contains('hidden') ? '▸' : '▾';
+});
+
+// ============================================================
+// STATS
+// ============================================================
+
+function loadStats() {
+  chrome.storage.local.get(['writingStats'], (data) => {
+    const stats = data.writingStats || {};
+    const today = new Date().toISOString().slice(0, 10);
+    const isToday = stats.date === today;
+
+    const checksRun   = isToday ? (stats.checksRun   || 0) : 0;
+    const errorsFound = isToday ? (stats.errorsFound  || 0) : 0;
+    const errorsFixed = isToday ? (stats.errorsFixed  || 0) : 0;
+
+    const statsSection = document.getElementById('statsSection');
+    if (checksRun === 0 && errorsFound === 0 && errorsFixed === 0) {
+      statsSection.style.display = 'none';
+      return;
+    }
+
+    statsSection.style.display = '';
+    document.getElementById('statsContent').innerHTML =
+      `<div class="stat-item"><span class="stat-num">${checksRun}</span><span class="stat-label">checks</span></div>` +
+      `<div class="stat-item"><span class="stat-num">${errorsFound}</span><span class="stat-label">errors found</span></div>` +
+      `<div class="stat-item"><span class="stat-num">${errorsFixed}</span><span class="stat-label">fixed</span></div>`;
+  });
+}
 
 // ============================================================
 // HELPERS

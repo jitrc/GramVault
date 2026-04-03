@@ -61,8 +61,8 @@ const GrammarRules = (() => {
     'thats': "that's", 'theyre': "they're", 'wasnt': "wasn't", 'wont': "won't",
     'teh': 'the', 'adn': 'and', 'hte': 'the', 'taht': 'that', 'waht': 'what',
     'recieved': 'received', 'beileve': 'believe', 'wich': 'which',
-    'occuring': 'occurring', 'untill': 'until', 'thier': 'their',
-    'beggining': 'beginning', 'belive': 'believe', 'goverment': 'government',
+    'occuring': 'occurring', 'thier': 'their',
+    'beggining': 'beginning', 'belive': 'believe',
     'happend': 'happened', 'occassionally': 'occasionally', 'tomatos': 'tomatoes',
   };
 
@@ -76,6 +76,15 @@ const GrammarRules = (() => {
     if (VOWEL_EXCEPTIONS.test(word)) return false;
     return VOWEL_SOUNDS.test(word);
   }
+
+  // English-specific rule names — skipped when language is not 'auto' or 'en'
+  const ENGLISH_ONLY_RULES = new Set([
+    'a-an',
+    'confusion-its',
+    'homophones',
+    'gender-neutral',
+    'subject-verb-simple',
+  ]);
 
   // The rule definitions
   const rules = [
@@ -94,6 +103,7 @@ const GrammarRules = (() => {
             message: `Repeated word: "${m[1]}"`,
             suggestions: [m[1]],
             source: 'rules',
+            severity: 'critical',
           });
         }
         return errors;
@@ -120,6 +130,7 @@ const GrammarRules = (() => {
               message: `Use "an" before "${nextWord}"`,
               suggestions: [m[1][0] === 'A' ? 'An' : 'an'],
               source: 'rules',
+              severity: 'critical',
             });
           } else if (article === 'an' && !needsAn) {
             errors.push({
@@ -129,6 +140,7 @@ const GrammarRules = (() => {
               message: `Use "a" before "${nextWord}"`,
               suggestions: [m[1][0] === 'A' ? 'A' : 'a'],
               source: 'rules',
+              severity: 'critical',
             });
           }
         }
@@ -152,6 +164,7 @@ const GrammarRules = (() => {
             message: 'Capitalize the first letter of a sentence',
             suggestions: [m[1].toUpperCase()],
             source: 'rules',
+            severity: 'warning',
           });
         }
         return errors;
@@ -176,6 +189,7 @@ const GrammarRules = (() => {
             message: 'Extra spaces detected',
             suggestions: [' '],
             source: 'rules',
+            severity: 'suggestion',
           });
         }
         return errors;
@@ -201,6 +215,7 @@ const GrammarRules = (() => {
             message: `Add a space after "${m[0][0]}"`,
             suggestions: [m[0][0] + ' ' + m[0][1]],
             source: 'rules',
+            severity: 'warning',
           });
         }
         return errors;
@@ -228,6 +243,7 @@ const GrammarRules = (() => {
               message: `Did you mean "${suggestion}"?`,
               suggestions: [suggestion],
               source: 'rules',
+              severity: 'critical',
             });
           }
         }
@@ -251,6 +267,7 @@ const GrammarRules = (() => {
             message: 'Did you mean "it\'s" (it is)?',
             suggestions: ["it's"],
             source: 'rules',
+            severity: 'warning',
           });
         }
         return errors;
@@ -285,6 +302,7 @@ const GrammarRules = (() => {
                 message: p.msg + `: "${m[1]} ${fixed}"`,
                 suggestions: [fixed],
                 source: 'rules',
+                severity: 'critical',
               });
             }
           }
@@ -312,9 +330,109 @@ const GrammarRules = (() => {
               message: 'Unclosed quotation mark',
               suggestions: [],
               source: 'rules',
+              severity: 'warning',
             });
           }
           offset += line.length + 1; // +1 for \n
+        }
+        return errors;
+      },
+    },
+
+    // --- HOMOPHONES: then/than confusion ---
+    {
+      name: 'homophones',
+      check(text) {
+        const errors = [];
+        // "more/less/better/worse/rather/other then" — should be "than"
+        const re = /\b(more|less|better|worse|rather|other)\s+then\b/gi;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          // "then" starts after the comparison word and the space
+          const thenStart = m.index + m[1].length + 1;
+          errors.push({
+            start: thenStart,
+            end: thenStart + 4,
+            original: text.slice(thenStart, thenStart + 4),
+            message: `Did you mean "than"? Use "than" for comparisons (e.g. "${m[1]} than")`,
+            suggestions: ['than'],
+            source: 'rules',
+            severity: 'warning',
+          });
+        }
+        return errors;
+      },
+    },
+
+    // --- GENDER-NEUTRAL LANGUAGE ---
+    {
+      name: 'gender-neutral',
+      check(text) {
+        const errors = [];
+        const pairs = [
+          { re: /\bhe or she\b/gi, suggestion: 'they' },
+          { re: /\bhim or her\b/gi, suggestion: 'them' },
+          { re: /\bhis or her\b/gi, suggestion: 'their' },
+          { re: /\bmankind\b/gi, suggestion: 'humankind' },
+          { re: /\bfiremen\b/gi, suggestion: 'firefighters' },
+          { re: /\bfireman\b/gi, suggestion: 'firefighter' },
+          { re: /\bpolicemen\b/gi, suggestion: 'police officers' },
+          { re: /\bpoliceman\b/gi, suggestion: 'police officer' },
+          { re: /\bchairmen\b/gi, suggestion: 'chairs' },
+          { re: /\bchairman\b/gi, suggestion: 'chair' },
+          { re: /\bstewardesses\b/gi, suggestion: 'flight attendants' },
+          { re: /\bstewardess\b/gi, suggestion: 'flight attendant' },
+          { re: /\bsalesmen\b/gi, suggestion: 'salespeople' },
+          { re: /\bsalesman\b/gi, suggestion: 'salesperson' },
+          { re: /\bworkmen\b/gi, suggestion: 'workers' },
+          { re: /\bworkman\b/gi, suggestion: 'worker' },
+          { re: /\bheadmaster\b/gi, suggestion: 'principal' },
+          { re: /\bpostmen\b/gi, suggestion: 'postal workers' },
+          { re: /\bpostman\b/gi, suggestion: 'postal worker' },
+          { re: /\bmanpower\b/gi, suggestion: 'workforce' },
+        ];
+
+        for (const { re, suggestion } of pairs) {
+          let m;
+          while ((m = re.exec(text)) !== null) {
+            const original = m[0];
+            errors.push({
+              start: m.index,
+              end: m.index + original.length,
+              original,
+              message: `Consider gender-neutral language: "${original}" → "${suggestion}"`,
+              suggestions: [suggestion],
+              source: 'rules',
+              severity: 'suggestion',
+            });
+          }
+        }
+        return errors;
+      },
+    },
+
+    // --- RUN-ON SENTENCES ---
+    {
+      name: 'run-on',
+      check(text) {
+        const errors = [];
+        // Split into sentences on ". ", "! ", "? " or end of string
+        const sentenceRe = /[^.!?]+(?:[.!?](?:\s|$)|$)/g;
+        let m;
+        while ((m = sentenceRe.exec(text)) !== null) {
+          const sentence = m[0];
+          const wordCount = sentence.trim().split(/\s+/).filter(w => w.length > 0).length;
+          if (wordCount > 50) {
+            errors.push({
+              start: m.index,
+              end: m.index + sentence.length,
+              original: sentence,
+              message: `This sentence is long (${wordCount} words). Consider breaking it up.`,
+              suggestions: [],
+              source: 'rules',
+              severity: 'suggestion',
+            });
+          }
         }
         return errors;
       },
@@ -324,13 +442,17 @@ const GrammarRules = (() => {
   /**
    * Run all rules against the given text.
    * @param {string} text
-   * @returns {{ errors: Array<{start: number, end: number, original: string, message: string, suggestions: string[], source: string}> }}
+   * @param {string} [language='auto'] — language code; non-English skips English-specific rules
+   * @returns {{ errors: Array<{start: number, end: number, original: string, message: string, suggestions: string[], source: string, severity: string}> }}
    */
-  function check(text) {
+  function check(text, language = 'auto') {
     if (!text || text.length < 2) return { errors: [] };
+
+    const isEnglish = language === 'auto' || language === 'en';
 
     const allErrors = [];
     for (const rule of rules) {
+      if (!isEnglish && ENGLISH_ONLY_RULES.has(rule.name)) continue;
       try {
         const errors = rule.check(text);
         allErrors.push(...errors);

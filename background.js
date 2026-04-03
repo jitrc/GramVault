@@ -137,7 +137,7 @@ async function getSettings() {
   return new Promise(resolve => {
     chrome.storage.local.get([
       'provider', 'model', 'enabled', 'llmFrequency',
-      'apiKeys', 'endpoints', 'providerModels',
+      'apiKeys', 'endpoints', 'providerModels', 'language',
     ], (data) => {
       resolve({
         provider: data.provider || 'ollama',
@@ -147,6 +147,7 @@ async function getSettings() {
         apiKeys: data.apiKeys || {},
         endpoints: data.endpoints || {},
         providerModels: data.providerModels || {},
+        language: data.language || 'auto',
       });
     });
   });
@@ -340,16 +341,28 @@ async function callProvider(text, prompt, settings) {
 }
 
 // ============================================================
+// LANGUAGE HELPER
+// ============================================================
+
+function getLanguageName(code) {
+  const names = { en: 'English', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', it: 'Italian', nl: 'Dutch', ja: 'Japanese', zh: 'Chinese' };
+  return names[code] || code;
+}
+
+// ============================================================
 // PROMPTS
 // ============================================================
 
 const PROMPTS = {
-  grammar: (text) => `You are a grammar checker. Analyze the following text and return a JSON object with an "errors" array. Each error must have: "original" (exact text), "start" (char index, 0-based), "end" (char index, exclusive), "message" (explanation), "suggestions" (array of corrections). If no errors: {"errors": []}. Only check grammar/spelling/punctuation.
+  grammar: (text, language = 'auto') => {
+    const langHint = language !== 'auto' ? `The text is written in ${getLanguageName(language)}. ` : '';
+    return `You are a grammar checker. ${langHint}Analyze the following text and return a JSON object with an "errors" array. Each error must have: "original" (exact text), "start" (char index, 0-based), "end" (char index, exclusive), "message" (explanation), "suggestions" (array of corrections). If no errors: {"errors": []}. Only check grammar/spelling/punctuation.
 
 Text:
 """
 ${text}
-"""`,
+"""`;
+  },
 
   rewrite: (text) => `Rewrite the following text to be clearer and more concise while preserving the meaning. Return JSON: {"result": "rewritten text"}
 
@@ -393,12 +406,15 @@ Text:
 ${text}
 """`,
 
-  toneCheck: (text) => `Analyze the tone of the following text. Return JSON: {"tone": "detected tone", "score": 1-10, "notes": "brief analysis", "suggestion": "optional rewrite if tone could be improved or empty string"}
+  toneCheck: (text, language = 'auto') => {
+    const langHint = language !== 'auto' ? `The text is written in ${getLanguageName(language)}. ` : '';
+    return `${langHint}Analyze the tone of the following text. Return JSON: {"tone": "detected tone", "score": 1-10, "notes": "brief analysis", "suggestion": "optional rewrite if tone could be improved or empty string"}
 
 Text:
 """
 ${text}
-"""`,
+"""`;
+  },
 
   friendly: (text) => `Rewrite the following text in a warm, friendly, and approachable tone. Return JSON: {"result": "friendly text"}
 
@@ -661,7 +677,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const prompt = PROMPTS.grammar(message.text);
+        const prompt = PROMPTS.grammar(message.text, settings.language);
         const raw = await callProvider(message.text, prompt, settings);
         if (controller.abort) return;
 
@@ -732,11 +748,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'FETCH_MODELS_FOR_BADGE') {
+    (async () => {
+      const settings = await getSettings();
+      const result = await fetchModels(settings.provider, settings);
+      sendResponse({
+        models: result.models || [],
+        currentModel: settings.model || '',
+        connected: result.connected,
+      });
+    })();
+    return true;
+  }
+
   if (message.type === 'RUN_ACTION') {
     (async () => {
       try {
         const settings = await getSettings();
-        const prompt = PROMPTS[message.action](message.text);
+        const prompt = message.action === 'grammar' || message.action === 'toneCheck'
+          ? PROMPTS[message.action](message.text, settings.language)
+          : PROMPTS[message.action](message.text);
         const raw = await callProvider(message.text, prompt, settings);
         const parsed = parseJsonResponse(raw);
 

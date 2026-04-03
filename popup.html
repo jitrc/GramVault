@@ -28,6 +28,23 @@
       <select id="providerSelect"></select>
     </div>
 
+    <!-- Language Selector -->
+    <div class="section">
+      <label class="section-label">Language</label>
+      <select id="languageSelect">
+        <option value="auto">Auto-detect</option>
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="pt">Portuguese</option>
+        <option value="it">Italian</option>
+        <option value="nl">Dutch</option>
+        <option value="ja">Japanese</option>
+        <option value="zh">Chinese</option>
+      </select>
+    </div>
+
     <!-- Cloud provider privacy warning -->
     <div class="section" id="cloudWarningSection" style="display:none">
       <div class="cloud-warning">
@@ -92,6 +109,27 @@
         <input type="checkbox" id="debugToggle">
         <span class="toggle-slider"></span>
       </label>
+    </div>
+
+    <!-- Custom Dictionary -->
+    <div class="section">
+      <div class="section-label collapsible-label" id="dictToggle">
+        Custom Dictionary <span id="dictCount" class="dict-count"></span>
+        <span class="collapse-arrow">▾</span>
+      </div>
+      <div id="dictSection">
+        <div id="dictWordList" class="dict-word-list"></div>
+        <div class="input-row dict-add-row">
+          <input type="text" id="dictInput" placeholder="Add word..." autocomplete="off">
+          <button id="dictAddBtn" class="btn-icon" title="Add to dictionary">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Today's Stats -->
+    <div class="section" id="statsSection">
+      <div class="section-label">Today's Stats</div>
+      <div id="statsContent" class="stats-grid"></div>
     </div>
 
     <!-- Legend & Context Menu Hint -->

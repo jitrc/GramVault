@@ -167,6 +167,19 @@
     if (changes.customDictionary) customDictionary = new Set(changes.customDictionary.newValue || []);
   });
 
+  // --- STATS TRACKING ---
+
+  function trackStat(key, delta = 1) {
+    const today = new Date().toISOString().slice(0, 10);
+    chrome.storage.local.get(['writingStats'], (data) => {
+      const stats = data.writingStats && data.writingStats.date === today
+        ? data.writingStats
+        : { date: today, checksRun: 0, errorsFound: 0, errorsFixed: 0 };
+      stats[key] = (stats[key] || 0) + delta;
+      chrome.storage.local.set({ writingStats: stats });
+    });
+  }
+
   // --- UTILITY FUNCTIONS ---
 
   function escapeHtml(str) {
@@ -476,8 +489,19 @@
       return;
     }
 
-    const hasLlm = errors.some(e => e.source === 'llm');
-    badge.className = `gc-badge-float ${hasLlm ? 'gc-badge-llm-active' : 'gc-badge-error'}`;
+    // Determine badge color by highest severity
+    const getSeverity = (err) => err.severity || (err.source === 'llm' ? 'warning' : 'critical');
+    const hasCritical = errors.some(e => getSeverity(e) === 'critical');
+    const hasWarning = errors.some(e => getSeverity(e) === 'warning');
+    let badgeColorClass;
+    if (hasCritical) {
+      badgeColorClass = 'gc-badge-error';
+    } else if (hasWarning) {
+      badgeColorClass = 'gc-badge-warning';
+    } else {
+      badgeColorClass = 'gc-badge-llm-active';
+    }
+    badge.className = `gc-badge-float ${badgeColorClass}`;
     badge.innerHTML = `<span class="gc-badge-count">${errors.length}</span>`;
     badge.title = `${errors.length} issue${errors.length > 1 ? 's' : ''} — click to fix`;
 
@@ -518,6 +542,16 @@
     // --- Header ---
     html += `<div class="gc-badge-panel-header">${errors.length > 0 ? `${errors.length} issue${errors.length > 1 ? 's' : ''}` : 'No issues'}</div>`;
 
+    // --- Model switcher row ---
+    html += `
+      <div class="gc-badge-model-row">
+        <span class="gc-badge-model-label">Model:</span>
+        <select class="gc-badge-model-select" id="gc-model-select">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+    `;
+
     // --- Quick Actions toolbar ---
     html += `
       <div class="gc-badge-panel-toolbar">
@@ -529,6 +563,7 @@
         <button class="gc-action-btn" data-action="summarize" title="Summarize">Summarize</button>
         <button class="gc-action-btn" data-action="bulleted" title="Bullets">Bullets</button>
         <button class="gc-action-btn gc-action-tone" data-action="toneCheck" title="Check tone">Tone</button>
+        <button class="gc-action-btn gc-action-batch" data-action="batch" title="Check all fields on this page">Check page</button>
       </div>
     `;
 
@@ -544,11 +579,16 @@
       const source = err.source === 'llm' ? 'AI' : 'Rules';
       const sourceClass = err.source === 'llm' ? 'gc-badge-src-llm' : 'gc-badge-src-rules';
       const suggestion = err.suggestions?.[0] || '';
+      const severity = err.severity || (err.source === 'llm' ? 'warning' : 'critical');
+      const diffHtml = suggestion
+        ? `<span class="gc-diff-original">${escapeHtml(err.original)}</span><span class="gc-diff-arrow">→</span><span class="gc-diff-new">${escapeHtml(suggestion)}</span>`
+        : `<span class="gc-badge-panel-original">${escapeHtml(err.original)}</span>`;
       html += `
         <div class="gc-badge-panel-item" data-idx="${i}">
           <div class="gc-badge-panel-item-top">
+            <span class="gc-sev-dot gc-sev-${severity}"></span>
             <span class="${sourceClass}">${source}</span>
-            <span class="gc-badge-panel-original">${escapeHtml(err.original)}</span>
+            ${diffHtml}
           </div>
           <div class="gc-badge-panel-msg">${escapeHtml(err.message)}</div>
           <div class="gc-badge-panel-actions">
@@ -576,6 +616,23 @@
     panel.style.right = (window.innerWidth - badgeRect.right) + 'px';
     document.body.appendChild(panel);
     activeBadgePanel = panel;
+
+    // --- Populate model switcher ---
+    chrome.runtime.sendMessage({ type: 'FETCH_MODELS_FOR_BADGE' }, (response) => {
+      const sel = panel.querySelector('#gc-model-select');
+      if (!sel || !response?.models) return;
+      sel.innerHTML = '';
+      response.models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        opt.textContent = m.name + (m.sizeHuman ? ` (${m.sizeHuman})` : '');
+        if (m.name === response.currentModel) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', () => {
+        chrome.storage.local.set({ model: sel.value });
+      });
+    });
 
     // Keep in viewport
     requestAnimationFrame(() => {
@@ -643,6 +700,10 @@
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const action = btn.dataset.action;
+        if (action === 'batch') {
+          runBatchCheck(panel);
+          return;
+        }
         runQuickAction(el, text, action, panel);
       });
     });
@@ -780,6 +841,41 @@
     });
   }
 
+  function runBatchCheck(panel) {
+    const resultArea = panel.querySelector('#gc-action-result');
+    resultArea.style.display = '';
+    resultArea.innerHTML = '<div class="gc-action-loading"><div class="gc-loading-spinner"></div> Checking all fields...</div>';
+
+    const allCheckable = [...document.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]')]
+      .filter(isCheckable);
+
+    let done = 0;
+    let totalErrors = 0;
+
+    if (allCheckable.length === 0) {
+      resultArea.innerHTML = '<div class="gc-action-error">No checkable fields found on this page.</div>';
+      return;
+    }
+
+    for (const fieldEl of allCheckable) {
+      const text = getText(fieldEl);
+      if (!text || text.trim().length < 2) { done++; checkDone(); continue; }
+      const { errors } = GrammarRules.check(text);
+      const state = getState(fieldEl);
+      state.ruleErrors = errors;
+      renderErrors(fieldEl);
+      totalErrors += errors.length;
+      done++;
+      checkDone();
+    }
+
+    function checkDone() {
+      if (done === allCheckable.length) {
+        resultArea.innerHTML = `<div class="gc-action-result-label">Page check complete: <strong>${totalErrors} issue${totalErrors !== 1 ? 's' : ''}</strong> found across <strong>${allCheckable.length} field${allCheckable.length !== 1 ? 's' : ''}</strong></div>`;
+      }
+    }
+  }
+
   function closeBadgePanelOnOutside(e) {
     if (activeBadgePanel && !activeBadgePanel.contains(e.target)) {
       dismissBadgePanel();
@@ -805,6 +901,7 @@
           el.value = text.slice(0, err.start) + fix + text.slice(err.end);
         }
         el.dispatchEvent(new Event('input', { bubbles: true }));
+        trackStat('errorsFixed');
         debugMessage('ok', `Fixed: "${err.original}" → "${fix}"`);
       }
     } else if (el.isContentEditable) {
@@ -825,6 +922,7 @@
           range.insertNode(document.createTextNode(fix));
         }
         el.dispatchEvent(new Event('input', { bubbles: true }));
+        trackStat('errorsFixed');
         debugMessage('ok', `Fixed: "${err.original}" → "${fix}"`);
       }
     }
@@ -843,6 +941,7 @@
       el.focus();
       el.value = text;
       el.dispatchEvent(new Event('input', { bubbles: true }));
+      trackStat('errorsFixed', fixable.length);
       debugMessage('ok', `Fixed all ${fixable.length} issues`);
     } else if (el.isContentEditable) {
       // Apply one by one in reverse
@@ -1104,6 +1203,8 @@
         if (response && response.errors) {
           const state = getState(el);
           state.llmErrors = response.errors;
+          trackStat('checksRun');
+          if (response.errors.length > 0) trackStat('errorsFound', response.errors.length);
           debugMessage('ok', `LLM: ${response.errors.length} errors in ${ms}ms`, response.errors.length > 0 ? response.errors.map(e => `"${e.original}" → ${e.suggestions.join('/')}`).join(', ') : null);
           renderErrors(el);
         } else {
