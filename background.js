@@ -98,6 +98,38 @@ const OLLAMA_PREFERRED = [
 const inflightRequests = new Map();
 
 // ============================================================
+// RATE LIMITER (cloud providers only)
+// ============================================================
+
+const CLOUD_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter']);
+const rateLimitCalls = new Map(); // providerKey -> [timestamp, ...]
+const RATE_LIMIT_MAX = 20; // calls per minute
+
+function checkRateLimit(providerKey) {
+  if (!CLOUD_PROVIDERS.has(providerKey)) return true;
+  const now = Date.now();
+  const prev = (rateLimitCalls.get(providerKey) || []).filter(t => now - t < 60000);
+  if (prev.length >= RATE_LIMIT_MAX) return false;
+  prev.push(now);
+  rateLimitCalls.set(providerKey, prev);
+  return true;
+}
+
+// ============================================================
+// FETCH WITH TIMEOUT
+// ============================================================
+
+async function fetchWithTimeout(url, options, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ============================================================
 // PROVIDER API CALLS
 // ============================================================
 
@@ -139,7 +171,7 @@ async function callOllama(text, prompt, settings) {
   const endpoint = getEndpoint(settings, 'ollama');
   const model = getModel(settings);
 
-  const response = await fetch(`${endpoint}/api/generate`, {
+  const response = await fetchWithTimeout(`${endpoint}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -170,7 +202,7 @@ async function callLMStudio(text, prompt, settings) {
     max_tokens: 2048,
   };
 
-  const response = await fetch(`${endpoint}/v1/chat/completions`, {
+  const response = await fetchWithTimeout(`${endpoint}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -190,7 +222,7 @@ async function callOpenAI(text, prompt, settings) {
   const apiKey = getApiKey(settings, 'openai');
   if (!apiKey) throw new Error('OpenAI API key not set');
 
-  const response = await fetch(`${endpoint}/v1/chat/completions`, {
+  const response = await fetchWithTimeout(`${endpoint}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -218,7 +250,7 @@ async function callAnthropic(text, prompt, settings) {
   const apiKey = getApiKey(settings, 'anthropic');
   if (!apiKey) throw new Error('Anthropic API key not set');
 
-  const response = await fetch(`${endpoint}/v1/messages`, {
+  const response = await fetchWithTimeout(`${endpoint}/v1/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -244,11 +276,14 @@ async function callGemini(text, prompt, settings) {
   if (!apiKey) throw new Error('Gemini API key not set');
   const model = getModel(settings);
 
-  const response = await fetch(
-    `${endpoint}/v1beta/models/${model}:generateContent?key=${apiKey}`,
+  const response = await fetchWithTimeout(
+    `${endpoint}/v1beta/models/${model}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt + '\n\nRespond with valid JSON only.' }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
@@ -266,7 +301,7 @@ async function callOpenRouter(text, prompt, settings) {
   const apiKey = getApiKey(settings, 'openrouter');
   if (!apiKey) throw new Error('OpenRouter API key not set');
 
-  const response = await fetch(`${endpoint}/api/v1/chat/completions`, {
+  const response = await fetchWithTimeout(`${endpoint}/api/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -290,6 +325,9 @@ async function callOpenRouter(text, prompt, settings) {
 // --- Unified call ---
 async function callProvider(text, prompt, settings) {
   const provider = settings.provider;
+  if (!checkRateLimit(provider)) {
+    throw new Error(`Rate limit reached for ${PROVIDERS[provider]?.name || provider} (max ${RATE_LIMIT_MAX} calls/min). Try again shortly.`);
+  }
   switch (provider) {
     case 'ollama': return callOllama(text, prompt, settings);
     case 'lmstudio': return callLMStudio(text, prompt, settings);
@@ -452,7 +490,7 @@ async function fetchModels(providerKey, settings) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`${endpoint}${provDef.modelsEndpoint}`, { headers });
+    const response = await fetchWithTimeout(`${endpoint}${provDef.modelsEndpoint}`, { headers }, 5000);
     if (!response.ok) return { models: [], connected: false };
 
     const data = await response.json();
@@ -667,7 +705,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (provDef.needsApiKey && apiKey) {
           headers['Authorization'] = `Bearer ${apiKey}`;
         }
-        const r = await fetch(`${endpoint}${provDef.modelsEndpoint || '/'}`, { headers });
+        const r = await fetchWithTimeout(`${endpoint}${provDef.modelsEndpoint || '/'}`, { headers }, 5000);
         sendResponse({ connected: r.ok });
       } catch {
         sendResponse({ connected: false });
@@ -748,4 +786,17 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Re-create context menus on startup (service worker can restart)
 chrome.runtime.onStartup.addListener(() => {
   setupContextMenus();
+});
+
+// ============================================================
+// KEYBOARD SHORTCUT
+// ============================================================
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'open-badge-panel') {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      chrome.tabs.sendMessage(tab.id, { type: 'OPEN_BADGE_PANEL' }).catch(() => {});
+    }
+  }
 });

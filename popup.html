@@ -28,6 +28,13 @@
       <select id="providerSelect"></select>
     </div>
 
+    <!-- Cloud provider privacy warning -->
+    <div class="section" id="cloudWarningSection" style="display:none">
+      <div class="cloud-warning">
+        &#x26A0;&#xFE0F; Text is sent to an external server. Do not use with sensitive or confidential content.
+      </div>
+    </div>
+
     <!-- API Key (shown for cloud providers) -->
     <div class="section" id="apiKeySection" style="display:none">
       <label class="section-label">API Key</label>
@@ -82,7 +89,7 @@
     <div class="section">
       <label class="toggle-label">
         <span>Debug Panel</span>
-        <input type="checkbox" id="debugToggle" checked>
+        <input type="checkbox" id="debugToggle">
         <span class="toggle-slider"></span>
       </label>
     </div>

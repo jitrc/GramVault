@@ -325,6 +325,22 @@
   color: #64748b;
 }
 
+.gc-badge-panel-adddict {
+  padding: 3px 8px;
+  background: transparent;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.gc-badge-panel-adddict:hover {
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+}
+
 .gc-badge-panel-fixall {
   padding: 8px 14px;
   border-top: 1px solid #f1f5f9;

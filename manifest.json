@@ -21,9 +21,19 @@
       "matches": ["<all_urls>"],
       "js": ["rules.js", "content.js"],
       "css": ["content.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
+  "commands": {
+    "open-badge-panel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+G",
+        "mac": "MacCtrl+Shift+G"
+      },
+      "description": "Open grammar checker panel for focused field"
+    }
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

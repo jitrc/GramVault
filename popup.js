@@ -13,6 +13,7 @@ const modelSelect = document.getElementById('modelSelect');
 const refreshModels = document.getElementById('refreshModels');
 const modelHint = document.getElementById('modelHint');
 const frequencyRadios = document.querySelectorAll('input[name="frequency"]');
+const cloudWarningSection = document.getElementById('cloudWarningSection');
 
 // State
 let providers = [];
@@ -70,9 +71,8 @@ async function init() {
   currentSettings = await sendMessage({ type: 'GET_SETTINGS' });
 
   enableToggle.checked = currentSettings.enabled;
-  // Debug defaults to true
   chrome.storage.local.get(['debugPanel'], (data) => {
-    debugToggle.checked = data.debugPanel !== false;
+    debugToggle.checked = data.debugPanel === true;
   });
   providerSelect.value = currentSettings.provider || 'ollama';
   frequencyRadios.forEach(r => { r.checked = r.value === currentSettings.llmFrequency; });
@@ -91,6 +91,9 @@ function updateProviderUI() {
   const provKey = providerSelect.value;
   const provDef = getProviderDef(provKey);
   if (!provDef) return;
+
+  // Show cloud privacy warning
+  cloudWarningSection.style.display = provDef.needsApiKey ? '' : 'none';
 
   // Show/hide API key field
   if (provDef.needsApiKey) {

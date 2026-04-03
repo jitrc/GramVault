@@ -14,6 +14,9 @@
   // Settings (loaded from storage)
   let settings = { enabled: true, llmFrequency: 'on-pause' };
 
+  // Custom dictionary (words to skip)
+  let customDictionary = new Set();
+
   // ============================================================
   // DEBUG PANEL
   // ============================================================
@@ -129,9 +132,9 @@
     });
   }
 
-  // Create panel based on setting (default: on)
+  // Create panel based on setting (default: off)
   chrome.storage.local.get(['debugPanel'], (data) => {
-    if (data.debugPanel !== false) {
+    if (data.debugPanel === true) {
       createDebugPanel();
       debugMessage('info', 'Grammar Checker initializing...');
     }
@@ -150,22 +153,24 @@
   });
 
   // Load settings
-  chrome.storage.local.get(['enabled', 'llmFrequency'], (data) => {
+  chrome.storage.local.get(['enabled', 'llmFrequency', 'customDictionary'], (data) => {
     settings.enabled = data.enabled !== false;
     settings.llmFrequency = data.llmFrequency || 'on-pause';
-    debugMessage('info', `Settings loaded: enabled=${settings.enabled}, freq=${settings.llmFrequency}`);
+    customDictionary = new Set(data.customDictionary || []);
+    debugMessage('info', `Settings loaded: enabled=${settings.enabled}, freq=${settings.llmFrequency}, dict=${customDictionary.size} words`);
   });
 
   // Listen for settings changes
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.enabled) settings.enabled = changes.enabled.newValue;
     if (changes.llmFrequency) settings.llmFrequency = changes.llmFrequency.newValue;
+    if (changes.customDictionary) customDictionary = new Set(changes.customDictionary.newValue || []);
   });
 
   // --- UTILITY FUNCTIONS ---
 
   function escapeHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   function getState(el) {
@@ -405,7 +410,9 @@
 
   function renderErrors(el) {
     const state = getState(el);
-    state.mergedErrors = mergeErrors(state.ruleErrors, state.llmErrors);
+    const merged = mergeErrors(state.ruleErrors, state.llmErrors);
+    // Filter out words in custom dictionary
+    state.mergedErrors = merged.filter(err => !customDictionary.has(err.original.toLowerCase().trim()));
 
     debugMessage('info', `Render: ${state.mergedErrors.length} errors for <${el.tagName.toLowerCase()}> (rules: ${state.ruleErrors.length}, llm: ${state.llmErrors.length})`);
 
@@ -544,10 +551,11 @@
             <span class="gc-badge-panel-original">${escapeHtml(err.original)}</span>
           </div>
           <div class="gc-badge-panel-msg">${escapeHtml(err.message)}</div>
-          ${suggestion ? `<div class="gc-badge-panel-actions">
-            ${err.suggestions.map(s => `<button class="gc-badge-panel-fix" data-idx="${i}" data-fix="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+          <div class="gc-badge-panel-actions">
+            ${suggestion ? err.suggestions.map(s => `<button class="gc-badge-panel-fix" data-idx="${i}" data-fix="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('') : ''}
             <button class="gc-badge-panel-dismiss" data-idx="${i}">Ignore</button>
-          </div>` : ''}
+            <button class="gc-badge-panel-adddict" data-word="${escapeHtml(err.original.toLowerCase().trim())}">+ Dictionary</button>
+          </div>
         </div>
       `;
     });
@@ -597,6 +605,26 @@
         state.ruleErrors = state.ruleErrors.filter(e => e !== err);
         state.llmErrors = state.llmErrors.filter(e => e !== err);
         renderErrors(el);
+        dismissBadgePanel();
+      });
+    });
+
+    // --- Wire up "Add to dictionary" buttons ---
+    panel.querySelectorAll('.gc-badge-panel-adddict').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const word = btn.dataset.word;
+        customDictionary.add(word);
+        chrome.storage.local.get(['customDictionary'], (data) => {
+          const dict = data.customDictionary || [];
+          if (!dict.includes(word)) dict.push(word);
+          chrome.storage.local.set({ customDictionary: dict });
+        });
+        const state = getState(el);
+        state.ruleErrors = state.ruleErrors.filter(e => e.original.toLowerCase().trim() !== word);
+        state.llmErrors = state.llmErrors.filter(e => e.original.toLowerCase().trim() !== word);
+        renderErrors(el);
+        dismissBadgePanel();
       });
     });
 
@@ -1405,8 +1433,20 @@
     setTimeout(() => dismissContextPopup(), 5000);
   }
 
-  // Listen for messages from background (context menu actions)
+  // Listen for messages from background (context menu actions + keyboard shortcut)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Keyboard shortcut: open badge panel for focused element
+    if (message.type === 'OPEN_BADGE_PANEL') {
+      const focused = document.activeElement;
+      if (focused && isCheckable(focused)) {
+        const state = getState(focused);
+        const badge = badgeMap.get(focused);
+        if (badge) toggleBadgePanel(focused, state.mergedErrors || [], badge);
+      }
+      sendResponse({ received: true });
+      return false;
+    }
+
     // Only handle our messages
     if (!message.type || !message.type.startsWith('CONTEXT_ACTION')) return false;
 
@@ -1463,9 +1503,35 @@
     return false; // Synchronous response
   });
 
-  // MutationObserver for dynamically added elements
+  // Cleanup resources for a removed element
+  function cleanupElement(el) {
+    const state = elementState.get(el);
+    if (state) {
+      if (state.resizeObserver) state.resizeObserver.disconnect();
+      if (state._repositionHandler) window.removeEventListener('scroll', state._repositionHandler, true);
+      if (state.overlay) state.overlay.remove();
+    }
+    const badge = badgeMap.get(el);
+    if (badge) {
+      if (badge._cleanup) badge._cleanup();
+      badge.remove();
+    }
+  }
+
+  // MutationObserver for dynamically added/removed elements
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
+      // Clean up removed elements
+      for (const node of mutation.removedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (isCheckable(node)) cleanupElement(node);
+        if (node.querySelectorAll) {
+          node.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]').forEach(el => {
+            if (isCheckable(el)) cleanupElement(el);
+          });
+        }
+      }
+      // Set up new elements
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
         // Check the node itself and its descendants

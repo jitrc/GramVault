@@ -248,3 +248,14 @@ option {
   color: #64748b;
   line-height: 1.4;
 }
+
+/* Cloud provider warning */
+.cloud-warning {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #92400e;
+  line-height: 1.4;
+}
