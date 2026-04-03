@@ -409,54 +409,266 @@
 
     debugMessage('info', `Render: ${state.mergedErrors.length} errors for <${el.tagName.toLowerCase()}> (rules: ${state.ruleErrors.length}, llm: ${state.llmErrors.length})`);
 
+    // Render overlay for textarea
     if (el.tagName === 'TEXTAREA') {
       try {
         renderTextareaOverlay(el, state.mergedErrors);
-        debugMessage('ok', `Overlay rendered (${state.overlay ? 'exists' : 'new'})`);
       } catch (e) {
         debugMessage('error', `Overlay render failed: ${e.message}`);
       }
-    } else if (el.tagName === 'INPUT') {
-      try {
-        renderInputErrors(el, state.mergedErrors);
-        debugMessage('ok', `Input errors rendered`);
-      } catch (e) {
-        debugMessage('error', `Input render failed: ${e.message}`);
-      }
-    } else if (el.isContentEditable || el.getAttribute?.('role') === 'textbox') {
+    }
+    // Render inline spans for contenteditable
+    if (el.isContentEditable || el.getAttribute?.('role') === 'textbox') {
       try {
         renderEditableErrors(el, state.mergedErrors);
-        debugMessage('ok', 'Editable errors rendered');
       } catch (e) {
         debugMessage('error', `Editable render failed: ${e.message}`);
       }
     }
+
+    // Always show/update the floating badge
+    updateBadge(el, state.mergedErrors);
   }
 
-  // --- INPUT ELEMENT ERRORS (border + tooltip, no overlay possible) ---
+  // ============================================================
+  // FLOATING BADGE (Grammarly-style)
+  // ============================================================
 
-  function renderInputErrors(input, errors) {
+  const badgeMap = new WeakMap(); // el -> badge element
+  let activeBadgePanel = null;
+
+  function updateBadge(el, errors) {
+    let badge = badgeMap.get(el);
+
     if (errors.length === 0) {
-      input.style.removeProperty('outline');
-      input.removeAttribute('data-gc-errors');
-      input.title = input._gcOriginalTitle || '';
+      if (badge) {
+        // Show green check briefly then fade
+        badge.className = 'gc-badge-float gc-badge-ok';
+        badge.innerHTML = '<span class="gc-badge-icon">✓</span>';
+        badge.onclick = null;
+        setTimeout(() => { badge.className = 'gc-badge-float gc-badge-hidden'; }, 2000);
+      }
+      dismissBadgePanel();
       return;
     }
 
-    // Save original title
-    if (!input._gcOriginalTitle) input._gcOriginalTitle = input.title || '';
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'gc-badge-float';
+      document.body.appendChild(badge);
+      badgeMap.set(el, badge);
 
-    // Red outline to indicate errors
-    const hasLlm = errors.some(e => e.source === 'llm');
-    input.style.outline = `2px solid ${hasLlm ? '#3b82f6' : '#e53e3e'}`;
-    input.style.outlineOffset = '-1px';
+      // Reposition on scroll/resize
+      const reposition = () => positionBadge(el, badge);
+      window.addEventListener('scroll', reposition, true);
+      const ro = new ResizeObserver(reposition);
+      ro.observe(el);
+      badge._cleanup = () => {
+        window.removeEventListener('scroll', reposition, true);
+        ro.disconnect();
+      };
+    }
 
-    // Show errors in tooltip
-    const tooltip = errors.map(e =>
-      `${e.original} → ${e.suggestions.join(' / ')} (${e.message})`
-    ).join('\n');
-    input.title = tooltip;
-    input.setAttribute('data-gc-errors', errors.length.toString());
+    const ruleCount = errors.filter(e => e.source === 'rules').length;
+    const llmCount = errors.filter(e => e.source === 'llm').length;
+    const hasLlm = llmCount > 0;
+
+    badge.className = `gc-badge-float ${hasLlm ? 'gc-badge-llm-active' : 'gc-badge-error'}`;
+    badge.innerHTML = `<span class="gc-badge-count">${errors.length}</span>`;
+    badge.title = `${errors.length} issue${errors.length > 1 ? 's' : ''} found (click to fix)`;
+    positionBadge(el, badge);
+
+    badge.onclick = (e) => {
+      e.stopPropagation();
+      toggleBadgePanel(el, errors, badge);
+    };
+  }
+
+  function positionBadge(el, badge) {
+    const rect = el.getBoundingClientRect();
+    badge.style.position = 'fixed';
+    badge.style.top = (rect.bottom - 30) + 'px';
+    badge.style.left = (rect.right - 36) + 'px';
+    // Keep in viewport
+    if (rect.right - 36 < rect.left) {
+      badge.style.left = (rect.right - 36) + 'px';
+    }
+  }
+
+  function toggleBadgePanel(el, errors, badge) {
+    if (activeBadgePanel && activeBadgePanel._el === el) {
+      dismissBadgePanel();
+      return;
+    }
+    dismissBadgePanel();
+    showBadgePanel(el, errors, badge);
+  }
+
+  function showBadgePanel(el, errors, badge) {
+    const panel = document.createElement('div');
+    panel.className = 'gc-badge-panel';
+    panel._el = el;
+
+    let html = `<div class="gc-badge-panel-header">${errors.length} issue${errors.length > 1 ? 's' : ''}</div>`;
+    html += '<div class="gc-badge-panel-list">';
+
+    errors.forEach((err, i) => {
+      const source = err.source === 'llm' ? 'AI' : 'Rules';
+      const sourceClass = err.source === 'llm' ? 'gc-badge-src-llm' : 'gc-badge-src-rules';
+      const suggestion = err.suggestions?.[0] || '';
+      html += `
+        <div class="gc-badge-panel-item" data-idx="${i}">
+          <div class="gc-badge-panel-item-top">
+            <span class="${sourceClass}">${source}</span>
+            <span class="gc-badge-panel-original">${escapeHtml(err.original)}</span>
+          </div>
+          <div class="gc-badge-panel-msg">${escapeHtml(err.message)}</div>
+          ${suggestion ? `<div class="gc-badge-panel-actions">
+            ${err.suggestions.map(s => `<button class="gc-badge-panel-fix" data-idx="${i}" data-fix="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+            <button class="gc-badge-panel-dismiss" data-idx="${i}">Ignore</button>
+          </div>` : ''}
+        </div>
+      `;
+    });
+
+    // Fix all button
+    const fixable = errors.filter(e => e.suggestions?.length > 0);
+    if (fixable.length > 1) {
+      html += `<div class="gc-badge-panel-fixall"><button class="gc-badge-panel-fixall-btn">Fix all ${fixable.length} issues</button></div>`;
+    }
+
+    html += '</div>';
+    panel.innerHTML = html;
+
+    // Position below badge
+    const badgeRect = badge.getBoundingClientRect();
+    panel.style.position = 'fixed';
+    panel.style.top = (badgeRect.bottom + 4) + 'px';
+    panel.style.right = (window.innerWidth - badgeRect.right) + 'px';
+    document.body.appendChild(panel);
+    activeBadgePanel = panel;
+
+    // Keep in viewport
+    requestAnimationFrame(() => {
+      const pr = panel.getBoundingClientRect();
+      if (pr.bottom > window.innerHeight - 8) {
+        panel.style.top = (badgeRect.top - pr.height - 4) + 'px';
+      }
+    });
+
+    // Fix individual error
+    panel.querySelectorAll('.gc-badge-panel-fix').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        const fix = btn.dataset.fix;
+        const err = errors[idx];
+        applyFixToElement(el, err, fix);
+        dismissBadgePanel();
+      });
+    });
+
+    // Ignore individual error
+    panel.querySelectorAll('.gc-badge-panel-dismiss').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        const state = getState(el);
+        // Remove from both rule and llm errors
+        const err = errors[idx];
+        state.ruleErrors = state.ruleErrors.filter(e => e !== err);
+        state.llmErrors = state.llmErrors.filter(e => e !== err);
+        renderErrors(el);
+      });
+    });
+
+    // Fix all
+    const fixAllBtn = panel.querySelector('.gc-badge-panel-fixall-btn');
+    if (fixAllBtn) {
+      fixAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyAllFixes(el, errors);
+        dismissBadgePanel();
+      });
+    }
+
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', closeBadgePanelOnOutside, true);
+    }, 0);
+  }
+
+  function closeBadgePanelOnOutside(e) {
+    if (activeBadgePanel && !activeBadgePanel.contains(e.target)) {
+      dismissBadgePanel();
+    }
+  }
+
+  function dismissBadgePanel() {
+    document.removeEventListener('click', closeBadgePanelOnOutside, true);
+    if (activeBadgePanel) {
+      activeBadgePanel.remove();
+      activeBadgePanel = null;
+    }
+  }
+
+  function applyFixToElement(el, err, fix) {
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      const text = el.value;
+      if (text.slice(err.start, err.end) === err.original) {
+        el.focus();
+        el.selectionStart = err.start;
+        el.selectionEnd = err.end;
+        if (!document.execCommand('insertText', false, fix)) {
+          el.value = text.slice(0, err.start) + fix + text.slice(err.end);
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        debugMessage('ok', `Fixed: "${err.original}" → "${fix}"`);
+      }
+    } else if (el.isContentEditable) {
+      // Find and replace in contenteditable
+      const textNodes = getTextNodesWithOffsets(el);
+      const startNode = textNodes.find(n => err.start >= n.start && err.start < n.end);
+      if (startNode) {
+        const localStart = err.start - startNode.start;
+        const localEnd = err.end - startNode.start;
+        const range = document.createRange();
+        range.setStart(startNode.node, localStart);
+        range.setEnd(startNode.node, localEnd);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        if (!document.execCommand('insertText', false, fix)) {
+          range.deleteContents();
+          range.insertNode(document.createTextNode(fix));
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        debugMessage('ok', `Fixed: "${err.original}" → "${fix}"`);
+      }
+    }
+  }
+
+  function applyAllFixes(el, errors) {
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      let text = el.value;
+      // Apply fixes in reverse order to preserve offsets
+      const fixable = errors.filter(e => e.suggestions?.length > 0).sort((a, b) => b.start - a.start);
+      for (const err of fixable) {
+        if (text.slice(err.start, err.end) === err.original) {
+          text = text.slice(0, err.start) + err.suggestions[0] + text.slice(err.end);
+        }
+      }
+      el.focus();
+      el.value = text;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      debugMessage('ok', `Fixed all ${fixable.length} issues`);
+    } else if (el.isContentEditable) {
+      // Apply one by one in reverse
+      const fixable = errors.filter(e => e.suggestions?.length > 0).sort((a, b) => b.start - a.start);
+      for (const err of fixable) {
+        applyFixToElement(el, err, err.suggestions[0]);
+      }
+    }
   }
 
   // --- SUGGESTION POPUP ---
