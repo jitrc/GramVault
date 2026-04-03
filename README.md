@@ -9,6 +9,19 @@
   Works like Grammarly but your text stays private — locked in your vault.
 </p>
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/badge-panel.png" width="420" alt="Badge panel with error fix"/><br><sub>Badge panel — inline diff with one-click fix</sub></td>
+    <td align="center"><img src="screenshots/tone-check.png" width="420" alt="Tone check result"/><br><sub>Tone check — detected tone with score</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/settings.png" width="320" alt="Settings popup"/><br><sub>Settings — provider, model, LLM frequency</sub></td>
+    <td align="center"><img src="screenshots/debug-panel.png" width="420" alt="Debug panel"/><br><sub>Debug panel — real-time check log</sub></td>
+  </tr>
+</table>
+
 ## Features
 
 - **Two-tier checking**: Instant rule-based checks (150ms) + LLM deep analysis (configurable)
