@@ -15,6 +15,9 @@ const modelHint = document.getElementById('modelHint');
 const frequencyRadios = document.querySelectorAll('input[name="frequency"]');
 const cloudWarningSection = document.getElementById('cloudWarningSection');
 const languageSelect = document.getElementById('languageSelect');
+const fieldTextarea = document.getElementById('fieldTextarea');
+const fieldInput = document.getElementById('fieldInput');
+const fieldEditable = document.getElementById('fieldEditable');
 
 // State
 let providers = [];
@@ -72,8 +75,12 @@ async function init() {
   currentSettings = await sendMessage({ type: 'GET_SETTINGS' });
 
   enableToggle.checked = currentSettings.enabled;
-  chrome.storage.local.get(['debugPanel'], (data) => {
+  chrome.storage.local.get(['debugPanel', 'fieldTypes'], (data) => {
     debugToggle.checked = data.debugPanel === true;
+    const ft = data.fieldTypes || { textarea: true, input: true, editable: true };
+    fieldTextarea.checked = ft.textarea !== false;
+    fieldInput.checked = ft.input !== false;
+    fieldEditable.checked = ft.editable !== false;
   });
   providerSelect.value = currentSettings.provider || 'ollama';
   frequencyRadios.forEach(r => { r.checked = r.value === currentSettings.llmFrequency; });
@@ -292,6 +299,19 @@ frequencyRadios.forEach(radio => {
 languageSelect.addEventListener('change', () => {
   chrome.storage.local.set({ language: languageSelect.value });
 });
+
+function saveFieldTypes() {
+  chrome.storage.local.set({
+    fieldTypes: {
+      textarea: fieldTextarea.checked,
+      input: fieldInput.checked,
+      editable: fieldEditable.checked,
+    }
+  });
+}
+fieldTextarea.addEventListener('change', saveFieldTypes);
+fieldInput.addEventListener('change', saveFieldTypes);
+fieldEditable.addEventListener('change', saveFieldTypes);
 
 // ============================================================
 // DICTIONARY (summary only — full management in dictionary.html)

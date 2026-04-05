@@ -142,8 +142,8 @@
 
   // React to debug toggle changes in real-time
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.debugPanel) {
-      if (changes.debugPanel.newValue === false) {
+    if ('debugPanel' in changes) {
+      if (!changes.debugPanel.newValue) {
         if (debugPanel) { debugPanel.remove(); debugPanel = null; }
       } else {
         createDebugPanel();
@@ -153,18 +153,33 @@
   });
 
   // Load settings
-  chrome.storage.local.get(['enabled', 'llmFrequency', 'customDictionary'], (data) => {
+  chrome.storage.local.get(['enabled', 'llmFrequency', 'customDictionary', 'fieldTypes'], (data) => {
     settings.enabled = data.enabled !== false;
     settings.llmFrequency = data.llmFrequency || 'on-pause';
+    settings.fieldTypes = data.fieldTypes || { textarea: true, input: true, editable: true };
     customDictionary = new Set(data.customDictionary || []);
     debugMessage('info', `Settings loaded: enabled=${settings.enabled}, freq=${settings.llmFrequency}, dict=${customDictionary.size} words`);
   });
 
+  // Remove all overlays, badges, and tone badges from the page
+  function cleanupAllUI() {
+    document.querySelectorAll('.gc-overlay, .gc-badge-float, .gc-tone-badge-float, .gc-badge-panel, .gc-tone-popup').forEach(el => el.remove());
+    activeBadgePanel = null;
+    activeTonePopup = null;
+  }
+
   // Listen for settings changes
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.enabled) settings.enabled = changes.enabled.newValue;
+    if (changes.enabled) {
+      settings.enabled = changes.enabled.newValue;
+      if (!changes.enabled.newValue) cleanupAllUI();
+    }
     if (changes.llmFrequency) settings.llmFrequency = changes.llmFrequency.newValue;
     if (changes.customDictionary) customDictionary = new Set(changes.customDictionary.newValue || []);
+    if (changes.fieldTypes) {
+      settings.fieldTypes = changes.fieldTypes.newValue || { textarea: true, input: true, editable: true };
+      cleanupAllUI();
+    }
   });
 
   // --- STATS TRACKING ---
@@ -206,15 +221,17 @@
 
   function isCheckable(el) {
     if (!el || !el.tagName) return false;
-    if (el.tagName === 'TEXTAREA') return true;
+    const ft = settings.fieldTypes || { textarea: true, input: true, editable: true };
+    if (el.tagName === 'TEXTAREA') return ft.textarea !== false;
     if (el.tagName === 'INPUT') {
+      if (ft.input === false) return false;
       const type = (el.type || 'text').toLowerCase();
       // Only check text-like inputs, not passwords/emails/search
       return ['text', 'search', ''].includes(type);
     }
-    if (el.isContentEditable && el.tagName !== 'BODY') return true;
+    if (el.isContentEditable && el.tagName !== 'BODY') return ft.editable !== false;
     // Support div[role="textbox"] used by modern editors
-    if (el.getAttribute?.('role') === 'textbox') return true;
+    if (el.getAttribute?.('role') === 'textbox') return ft.editable !== false;
     return false;
   }
 

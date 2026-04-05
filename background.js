@@ -602,9 +602,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const action = menuItem.action;
   const prompt = PROMPTS[action](selectedText);
 
+  // Target the specific frame where the context menu was triggered
+  const frameOpts = info.frameId != null ? { frameId: info.frameId } : undefined;
+
   // Notify content script: show loading
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'CONTEXT_ACTION_START', action });
+    await chrome.tabs.sendMessage(tabId, { type: 'CONTEXT_ACTION_START', action }, frameOpts);
   } catch (e) {
     // Content script may not be injected on this page
     console.warn('[GV] Could not reach content script:', e.message);
@@ -622,7 +625,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         action,
         errors,
         originalText: selectedText,
-      });
+      }, frameOpts);
     } else if (action === 'toneCheck') {
       await chrome.tabs.sendMessage(tabId, {
         type: 'CONTEXT_ACTION_RESULT',
@@ -632,14 +635,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         notes: parsed.notes || '',
         suggestion: parsed.suggestion || '',
         originalText: selectedText,
-      });
+      }, frameOpts);
     } else {
       await chrome.tabs.sendMessage(tabId, {
         type: 'CONTEXT_ACTION_RESULT',
         action,
         result: parsed.result || raw,
         originalText: selectedText,
-      });
+      }, frameOpts);
     }
   } catch (e) {
     console.error('[GV] Context action failed:', e);
@@ -648,7 +651,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         type: 'CONTEXT_ACTION_ERROR',
         action,
         error: e.message,
-      });
+      }, frameOpts);
     } catch (_) {
       // Content script unreachable
     }

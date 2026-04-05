@@ -208,6 +208,27 @@ option {
   width: auto;
 }
 
+/* Checkbox group (field types) */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+
+.checkbox-label input {
+  accent-color: #3b82f6;
+  width: auto;
+}
+
 /* Legend */
 .legend {
   display: flex;
